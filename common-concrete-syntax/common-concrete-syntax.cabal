@@ -1,0 +1,56 @@
+cabal-version:      3.0
+name:               common-concrete-syntax
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Marseille Bouchard Demko
+maintainer:         marseillebd@proton.me
+-- copyright:
+category:           Language
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:
+      Language.CCS.Location
+      Language.CCS.Token.Raw
+    -- other-modules:
+    -- other-extensions:
+    build-depends:
+      , base ^>=4.21.0.0
+      , nanopass >=0.0.3.1
+      , streaming
+      , text
+    hs-source-dirs:   src
+    default-language: Haskell2010
+    default-extensions:
+      , LambdaCase
+      , NamedFieldPuns
+      , OverloadedRecordDot
+      , OverloadedStrings
+      , QuasiQuotes
+      , ScopedTypeVariables
+      , StandaloneDeriving
+
+
+test-suite common-concrete-syntax-test
+    import:           warnings
+    default-language: Haskell2010
+    -- other-modules:
+    -- other-extensions:
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        , base ^>=4.21.0.0
+        , common-concrete-syntax
+        , tasty
+        , tasty-golden
+        , text

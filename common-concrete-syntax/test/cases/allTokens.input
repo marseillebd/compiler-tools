@@ -1,0 +1,20 @@
+# a comment (and a newline)
+   # linear whitespace
+	  # mixed lws
+
+,.:;\ # all the simple punctuation
+()[]{} # all the enclosing punctuation
+
+a # single letter identifier
+hello # longer identifier
+<$> # operator-looking identifier
+lt? # mixed identifier
+a0!$%&*+-/<=>?@^_|~ # an identifier with all the characters
++ ++ - -> # identifiers that start with plus and minus
+
+"" `` `" "` # empty strings
+"hello world" # basic string
+"hello `name`" # template string
+" # unterminated string
+"\0\a\b\e\f\n\r\t\v\'\"\`\\\&" # basic escapes
+"\x1aaa\udead\&beef" # codepoint escapes

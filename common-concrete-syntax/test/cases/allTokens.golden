@@ -1,0 +1,119 @@
+Comment (Span {start = Off {line = 1, col = 1}, end = Off {line = 1, col = 28}}) "# a comment (and a newline)"
+Newline (Span {start = Off {line = 1, col = 28}, end = Off {line = 2, col = 1}})
+Whitespace (Span {start = Off {line = 2, col = 1}, end = Off {line = 2, col = 4}}) "   "
+Comment (Span {start = Off {line = 2, col = 4}, end = Off {line = 2, col = 23}}) "# linear whitespace"
+Newline (Span {start = Off {line = 2, col = 23}, end = Off {line = 3, col = 1}})
+Whitespace (Span {start = Off {line = 3, col = 1}, end = Off {line = 3, col = 4}}) "\t  "
+Comment (Span {start = Off {line = 3, col = 4}, end = Off {line = 3, col = 15}}) "# mixed lws"
+Newline (Span {start = Off {line = 3, col = 15}, end = Off {line = 4, col = 1}})
+Newline (Span {start = Off {line = 4, col = 1}, end = Off {line = 5, col = 1}})
+Punctuation (Span {start = Off {line = 5, col = 1}, end = Off {line = 5, col = 2}}) Comma
+Punctuation (Span {start = Off {line = 5, col = 2}, end = Off {line = 5, col = 3}}) Dot
+Punctuation (Span {start = Off {line = 5, col = 3}, end = Off {line = 5, col = 4}}) Colon
+Punctuation (Span {start = Off {line = 5, col = 4}, end = Off {line = 5, col = 5}}) Semicolon
+Punctuation (Span {start = Off {line = 5, col = 5}, end = Off {line = 5, col = 6}}) Backslash
+Whitespace (Span {start = Off {line = 5, col = 6}, end = Off {line = 5, col = 7}}) " "
+Comment (Span {start = Off {line = 5, col = 7}, end = Off {line = 5, col = 35}}) "# all the simple punctuation"
+Newline (Span {start = Off {line = 5, col = 35}, end = Off {line = 6, col = 1}})
+Punctuation (Span {start = Off {line = 6, col = 1}, end = Off {line = 6, col = 2}}) (Open Round)
+Punctuation (Span {start = Off {line = 6, col = 2}, end = Off {line = 6, col = 3}}) (Close Round)
+Punctuation (Span {start = Off {line = 6, col = 3}, end = Off {line = 6, col = 4}}) (Open Square)
+Punctuation (Span {start = Off {line = 6, col = 4}, end = Off {line = 6, col = 5}}) (Close Square)
+Punctuation (Span {start = Off {line = 6, col = 5}, end = Off {line = 6, col = 6}}) (Open Curly)
+Punctuation (Span {start = Off {line = 6, col = 6}, end = Off {line = 6, col = 7}}) (Close Curly)
+Whitespace (Span {start = Off {line = 6, col = 7}, end = Off {line = 6, col = 8}}) " "
+Comment (Span {start = Off {line = 6, col = 8}, end = Off {line = 6, col = 39}}) "# all the enclosing punctuation"
+Newline (Span {start = Off {line = 6, col = 39}, end = Off {line = 7, col = 1}})
+Newline (Span {start = Off {line = 7, col = 1}, end = Off {line = 8, col = 1}})
+Symbol (Span {start = Off {line = 8, col = 1}, end = Off {line = 8, col = 2}}) "a"
+Whitespace (Span {start = Off {line = 8, col = 2}, end = Off {line = 8, col = 3}}) " "
+Comment (Span {start = Off {line = 8, col = 3}, end = Off {line = 8, col = 29}}) "# single letter identifier"
+Newline (Span {start = Off {line = 8, col = 29}, end = Off {line = 9, col = 1}})
+Symbol (Span {start = Off {line = 9, col = 1}, end = Off {line = 9, col = 6}}) "hello"
+Whitespace (Span {start = Off {line = 9, col = 6}, end = Off {line = 9, col = 7}}) " "
+Comment (Span {start = Off {line = 9, col = 7}, end = Off {line = 9, col = 26}}) "# longer identifier"
+Newline (Span {start = Off {line = 9, col = 26}, end = Off {line = 10, col = 1}})
+Symbol (Span {start = Off {line = 10, col = 1}, end = Off {line = 10, col = 4}}) "<$>"
+Whitespace (Span {start = Off {line = 10, col = 4}, end = Off {line = 10, col = 5}}) " "
+Comment (Span {start = Off {line = 10, col = 5}, end = Off {line = 10, col = 34}}) "# operator-looking identifier"
+Newline (Span {start = Off {line = 10, col = 34}, end = Off {line = 11, col = 1}})
+Symbol (Span {start = Off {line = 11, col = 1}, end = Off {line = 11, col = 4}}) "lt?"
+Whitespace (Span {start = Off {line = 11, col = 4}, end = Off {line = 11, col = 5}}) " "
+Comment (Span {start = Off {line = 11, col = 5}, end = Off {line = 11, col = 23}}) "# mixed identifier"
+Newline (Span {start = Off {line = 11, col = 23}, end = Off {line = 12, col = 1}})
+Symbol (Span {start = Off {line = 12, col = 1}, end = Off {line = 12, col = 20}}) "a0!$%&*+-/<=>?@^_|~"
+Whitespace (Span {start = Off {line = 12, col = 20}, end = Off {line = 12, col = 21}}) " "
+Comment (Span {start = Off {line = 12, col = 21}, end = Off {line = 12, col = 60}}) "# an identifier with all the characters"
+Newline (Span {start = Off {line = 12, col = 60}, end = Off {line = 13, col = 1}})
+Symbol (Span {start = Off {line = 13, col = 1}, end = Off {line = 13, col = 2}}) "+"
+Whitespace (Span {start = Off {line = 13, col = 2}, end = Off {line = 13, col = 3}}) " "
+Symbol (Span {start = Off {line = 13, col = 3}, end = Off {line = 13, col = 5}}) "++"
+Whitespace (Span {start = Off {line = 13, col = 5}, end = Off {line = 13, col = 6}}) " "
+Symbol (Span {start = Off {line = 13, col = 6}, end = Off {line = 13, col = 7}}) "-"
+Whitespace (Span {start = Off {line = 13, col = 7}, end = Off {line = 13, col = 8}}) " "
+Symbol (Span {start = Off {line = 13, col = 8}, end = Off {line = 13, col = 10}}) "->"
+Whitespace (Span {start = Off {line = 13, col = 10}, end = Off {line = 13, col = 11}}) " "
+Comment (Span {start = Off {line = 13, col = 11}, end = Off {line = 13, col = 55}}) "# identifiers that start with plus and minus"
+Newline (Span {start = Off {line = 13, col = 55}, end = Off {line = 14, col = 1}})
+Newline (Span {start = Off {line = 14, col = 1}, end = Off {line = 15, col = 1}})
+Quote (Span {start = Off {line = 15, col = 1}, end = Off {line = 15, col = 2}}) DblQuote
+Quote (Span {start = Off {line = 15, col = 2}, end = Off {line = 15, col = 3}}) DblQuote
+Whitespace (Span {start = Off {line = 15, col = 3}, end = Off {line = 15, col = 4}}) " "
+Quote (Span {start = Off {line = 15, col = 4}, end = Off {line = 15, col = 5}}) Backtick
+Quote (Span {start = Off {line = 15, col = 5}, end = Off {line = 15, col = 6}}) Backtick
+Whitespace (Span {start = Off {line = 15, col = 6}, end = Off {line = 15, col = 7}}) " "
+Quote (Span {start = Off {line = 15, col = 7}, end = Off {line = 15, col = 8}}) Backtick
+Quote (Span {start = Off {line = 15, col = 8}, end = Off {line = 15, col = 9}}) DblQuote
+Whitespace (Span {start = Off {line = 15, col = 9}, end = Off {line = 15, col = 10}}) " "
+Quote (Span {start = Off {line = 15, col = 10}, end = Off {line = 15, col = 11}}) DblQuote
+Quote (Span {start = Off {line = 15, col = 11}, end = Off {line = 15, col = 12}}) Backtick
+Whitespace (Span {start = Off {line = 15, col = 12}, end = Off {line = 15, col = 13}}) " "
+Comment (Span {start = Off {line = 15, col = 13}, end = Off {line = 15, col = 28}}) "# empty strings"
+Newline (Span {start = Off {line = 15, col = 28}, end = Off {line = 16, col = 1}})
+Quote (Span {start = Off {line = 16, col = 1}, end = Off {line = 16, col = 2}}) DblQuote
+StdStr (Span {start = Off {line = 16, col = 2}, end = Off {line = 16, col = 13}}) "hello world"
+Quote (Span {start = Off {line = 16, col = 13}, end = Off {line = 16, col = 14}}) DblQuote
+Whitespace (Span {start = Off {line = 16, col = 14}, end = Off {line = 16, col = 15}}) " "
+Comment (Span {start = Off {line = 16, col = 15}, end = Off {line = 16, col = 29}}) "# basic string"
+Newline (Span {start = Off {line = 16, col = 29}, end = Off {line = 17, col = 1}})
+Quote (Span {start = Off {line = 17, col = 1}, end = Off {line = 17, col = 2}}) DblQuote
+StdStr (Span {start = Off {line = 17, col = 2}, end = Off {line = 17, col = 8}}) "hello "
+Quote (Span {start = Off {line = 17, col = 8}, end = Off {line = 17, col = 9}}) Backtick
+Symbol (Span {start = Off {line = 17, col = 9}, end = Off {line = 17, col = 13}}) "name"
+Quote (Span {start = Off {line = 17, col = 13}, end = Off {line = 17, col = 14}}) Backtick
+Quote (Span {start = Off {line = 17, col = 14}, end = Off {line = 17, col = 15}}) DblQuote
+Whitespace (Span {start = Off {line = 17, col = 15}, end = Off {line = 17, col = 16}}) " "
+Comment (Span {start = Off {line = 17, col = 16}, end = Off {line = 17, col = 33}}) "# template string"
+Newline (Span {start = Off {line = 17, col = 33}, end = Off {line = 18, col = 1}})
+Quote (Span {start = Off {line = 18, col = 1}, end = Off {line = 18, col = 2}}) DblQuote
+StdStr (Span {start = Off {line = 18, col = 2}, end = Off {line = 18, col = 24}}) " # unterminated string"
+Newline (Span {start = Off {line = 18, col = 24}, end = Off {line = 19, col = 1}})
+Quote (Span {start = Off {line = 19, col = 1}, end = Off {line = 19, col = 2}}) DblQuote
+StrEscape (Span {start = Off {line = 19, col = 2}, end = Off {line = 19, col = 4}}) "\NUL"
+StrEscape (Span {start = Off {line = 19, col = 4}, end = Off {line = 19, col = 6}}) "\a"
+StrEscape (Span {start = Off {line = 19, col = 6}, end = Off {line = 19, col = 8}}) "\b"
+StrEscape (Span {start = Off {line = 19, col = 8}, end = Off {line = 19, col = 10}}) "\ESC"
+StrEscape (Span {start = Off {line = 19, col = 10}, end = Off {line = 19, col = 12}}) "\f"
+StrEscape (Span {start = Off {line = 19, col = 12}, end = Off {line = 19, col = 14}}) "\n"
+StrEscape (Span {start = Off {line = 19, col = 14}, end = Off {line = 19, col = 16}}) "\r"
+StrEscape (Span {start = Off {line = 19, col = 16}, end = Off {line = 19, col = 18}}) "\t"
+StrEscape (Span {start = Off {line = 19, col = 18}, end = Off {line = 19, col = 20}}) "\v"
+StrEscape (Span {start = Off {line = 19, col = 20}, end = Off {line = 19, col = 22}}) "'"
+StrEscape (Span {start = Off {line = 19, col = 22}, end = Off {line = 19, col = 24}}) "\""
+StrEscape (Span {start = Off {line = 19, col = 24}, end = Off {line = 19, col = 26}}) "`"
+StrEscape (Span {start = Off {line = 19, col = 26}, end = Off {line = 19, col = 28}}) "\\"
+StrEscape (Span {start = Off {line = 19, col = 28}, end = Off {line = 19, col = 30}}) ""
+Quote (Span {start = Off {line = 19, col = 30}, end = Off {line = 19, col = 31}}) DblQuote
+Whitespace (Span {start = Off {line = 19, col = 31}, end = Off {line = 19, col = 32}}) " "
+Comment (Span {start = Off {line = 19, col = 32}, end = Off {line = 19, col = 47}}) "# basic escapes"
+Newline (Span {start = Off {line = 19, col = 47}, end = Off {line = 20, col = 1}})
+Quote (Span {start = Off {line = 20, col = 1}, end = Off {line = 20, col = 2}}) DblQuote
+StrEscape (Span {start = Off {line = 20, col = 2}, end = Off {line = 20, col = 6}}) "\SUB"
+StdStr (Span {start = Off {line = 20, col = 6}, end = Off {line = 20, col = 8}}) "aa"
+StrEscape (Span {start = Off {line = 20, col = 8}, end = Off {line = 20, col = 14}}) "\57005"
+StrEscape (Span {start = Off {line = 20, col = 14}, end = Off {line = 20, col = 16}}) ""
+StdStr (Span {start = Off {line = 20, col = 16}, end = Off {line = 20, col = 20}}) "beef"
+Quote (Span {start = Off {line = 20, col = 20}, end = Off {line = 20, col = 21}}) DblQuote
+Whitespace (Span {start = Off {line = 20, col = 21}, end = Off {line = 20, col = 22}}) " "
+Comment (Span {start = Off {line = 20, col = 22}, end = Off {line = 20, col = 41}}) "# codepoint escapes"
+Newline (Span {start = Off {line = 20, col = 41}, end = Off {line = 21, col = 1}})

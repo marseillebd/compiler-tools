@@ -1,2 +1,4 @@
 packages: */*.cabal
 
+allow-newer:
+  sexpr-parser:megaparsec
