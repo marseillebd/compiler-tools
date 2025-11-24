@@ -9,11 +9,14 @@ module Language.CCS.Token.Raw
   , tokenize
   ) where
 
+import Language.CCS.Error
+
 import Data.Char (chr, ord)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Language.CCS.Location (Span(..), Off(..))
+import Language.CCS.Location (Pos, startPos, incCol, incLine)
+import Language.CCS.Location (Span, spanFromPos, mkSpanOrPanic_)
 import Language.Nanopass (deflang)
 import Streaming.Prelude (Stream, Of(..))
 
@@ -103,7 +106,7 @@ tokenize :: (Monad m) => Text -> m [Token Span]
 tokenize input =
   T.unpack input
   & S.each
-  & charSpans Off { line = 1, col = 1 } -- TODO allow for alternate start locations
+  & charSpans startPos -- TODO allow for alternate start locations
   & stdMode
   & S.toList
   & fmap (\(toks :> _) -> toks)
@@ -141,7 +144,7 @@ stdMode s = S.effect $ S.next s <&> \case
   Right ((c, l), s') -> case classify c of
     Id -> S.effect $ do
       ((cs, r) :> s'') <- takeText l.end continuesId s'
-      let tok = Symbol (Span l.start r) (T.cons c cs)
+      let tok = Symbol (mkSpanOrPanic_ l.start r) (T.cons c cs)
       pure $ do
         S.yield tok
         stdMode s''
@@ -154,7 +157,7 @@ stdMode s = S.effect $ S.next s <&> \case
         unimplemented "plus and minus"
       else do -- just a symbol
         ((cs, r) :> s''') <- takeText l.end continuesId s''
-        let tok = Symbol (Span l.start r) (T.cons c cs)
+        let tok = Symbol (mkSpanOrPanic_ l.start r) (T.cons c cs)
         pure $ do
           S.yield tok
           stdMode s'''
@@ -182,13 +185,13 @@ stdMode s = S.effect $ S.next s <&> \case
       strMode s'
     Hash -> S.effect $ do
       ((content, r) :> s'') <- takeText l.end ((Nl /=) . classify) s'
-      let tok = Comment (Span l.start r) (T.cons c content)
+      let tok = Comment (mkSpanOrPanic_ l.start r) (T.cons c content)
       pure $ do
         S.yield tok
         stdMode s''
     Lws -> S.effect $ do
       ((cs, r) :> s'') <- takeText l.end ((Lws ==) . classify) s'
-      let tok = Whitespace (Span l.start r) (T.cons c cs)
+      let tok = Whitespace (mkSpanOrPanic_ l.start r) (T.cons c cs)
       pure $ do
         S.yield tok
         stdMode s''
@@ -197,7 +200,7 @@ stdMode s = S.effect $ S.next s <&> \case
       stdMode s'
     Ill -> S.effect $ do
       ((content, r) :> s'') <- takeText l.end ((Ill ==) . classify) s'
-      let tok = Illegal (Span l.start r) (T.cons c content)
+      let tok = Illegal (mkSpanOrPanic_ l.start r) (T.cons c content)
       pure $ do
         S.yield tok
         stdMode s''
@@ -267,7 +270,7 @@ strMode s = S.effect $ S.next s <&> \case
   Right ((c, l), s') -> case classify c of
     Std -> S.effect $ do
       ((cs, r) :> s'') <- takeText l.end ((Std ==) . classify) s'
-      let tok = StdStr (Span l.start r) (T.cons c cs)
+      let tok = StdStr (mkSpanOrPanic_ l.start r) (T.cons c cs)
       pure $ do
         S.yield tok
         strMode s''
@@ -277,15 +280,15 @@ strMode s = S.effect $ S.next s <&> \case
           pure done
       Right ((c', r), s'') -> case lookup c' stdEscapes of
         Just escValue -> do
-          let tok = StrEscape (Span l.start r.end) escValue
+          let tok = StrEscape (mkSpanOrPanic_ l.start r.end) escValue
           S.yield tok
           strMode s''
         Nothing
           | c' == 'x' -> S.effect $ do
             (cs, r', rest) <- take2 l.start s''
-            let badTok = Illegal (Span l.start r') (T.cons c $ T.cons c' cs)
+            let badTok = Illegal (mkSpanOrPanic_ l.start r') (T.cons c $ T.cons c' cs)
                 tok = case parseHex cs >>= toCodepoint of
-                  Just code -> StrEscape (Span l.start r') [code]
+                  Just code -> StrEscape (mkSpanOrPanic_ l.start r') [code]
                   Nothing -> badTok
             case rest of
               Left done -> pure $ do
@@ -298,13 +301,13 @@ strMode s = S.effect $ S.next s <&> \case
           || c' == 'U' -> S.effect $ do
             ((cs, r') :> s''') <- takeText r.end isHexDigit s''
             let tok = case parseHex cs >>= toCodepoint of
-                  Just code -> StrEscape (Span l.start r') [code]
-                  Nothing -> Illegal (Span l.start r') (T.cons c $ T.cons c' cs)
+                  Just code -> StrEscape (mkSpanOrPanic_ l.start r') [code]
+                  Nothing -> Illegal (mkSpanOrPanic_ l.start r') (T.cons c $ T.cons c' cs)
             pure $ do
               S.yield tok
               strMode s'''
           | otherwise -> do
-            S.yield $ Illegal (Span l.start r.end) (T.pack [c, c'])
+            S.yield $ Illegal (mkSpanOrPanic_ l.start r.end) (T.pack [c, c'])
             strMode s''
     QuoDblStr -> do
       S.yield $ Quote l DblQuote
@@ -317,7 +320,7 @@ strMode s = S.effect $ S.next s <&> \case
       stdMode s''
     IllStr -> S.effect $ do
       ((cs, r) :> s'') <- takeText l.end ((IllStr ==) . classify) s'
-      let tok = Illegal (Span l.start r) (T.cons c cs)
+      let tok = Illegal (mkSpanOrPanic_ l.start r) (T.cons c cs)
       pure $ do
         S.yield tok
         stdMode s''
@@ -359,20 +362,21 @@ mlstrMode = unimplemented "multi-line string mode"
 
 -- | Adds location information into a character stream.
 -- It's easier IMO to just have the location info for every character already there, rather than try to compute it as part of the lexer's state.
-charSpans :: Monad m => Off -> Stream (Of Char) m r -> Stream (Of (Char, Span)) m r
-charSpans off0 = S.scanned update (Span off0 off0) id
+charSpans :: Monad m => Pos -> Stream (Of Char) m r -> Stream (Of (Char, Span)) m r
+charSpans off0 = S.scanned update (spanFromPos off0) id
   where
-  update (Span _ off) c = Span off (off `advChar` c)
-  advChar :: Off -> Char -> Off
-  advChar off '\n' = off{line = off.line+1, col = 1}
+  update :: Span -> Char -> Span
+  update l c = mkSpanOrPanic_ l.end (l.end `advChar` c)
+  advChar :: Pos -> Char -> Pos
+  advChar off '\n' = incLine off
   -- NOTE should I care about any other newline sequences?
-  advChar off _ = off{col = off.col+1}
+  advChar off _ = incCol off
 
 takeText :: (Monad m)
-  => Off -- ^ initial position (in case I can't get it, ie from an empty input stream)
+  => Pos -- ^ initial position (in case I can't get it, ie from an empty input stream)
   -> (Char -> Bool) -- ^ accumulate text while this is true
   -> CharStream m r -- ^ input stream
-  -> m (Of (Text, Off) (CharStream m r)) -- ^ accumulated text and final position
+  -> m (Of (Text, Pos) (CharStream m r)) -- ^ accumulated text and final position
 takeText l p stream = S.fold
   (\(txt, _) (c', r') -> (T.snoc txt c', r'.end))
   ("", l)
@@ -402,9 +406,9 @@ test2 s p = S.next s >>= \case
       pure (p (fst a) (fst b), s''')
 
 take2 :: (Monad m)
-  => Off
+  => Pos
   -> CharStream m r
-  -> m (Text, Off, Either r (CharStream m r))
+  -> m (Text, Pos, Either r (CharStream m r))
 take2 off0 s = S.next s >>= \case
   Left done -> pure ("", off0, Left done)
   Right (a, s') -> S.next s' >>= \case
@@ -413,9 +417,6 @@ take2 off0 s = S.next s >>= \case
 
 type CharStream m r = Stream (Of (Char, Span)) m r
 type TokenStream m r = Stream (Of (Token Span)) m r
-
-unimplemented :: String -> a
-unimplemented msg = error $ "UNIMPLEMENTED: " ++ msg
 
 isHexDigit :: Char -> Bool
 isHexDigit c

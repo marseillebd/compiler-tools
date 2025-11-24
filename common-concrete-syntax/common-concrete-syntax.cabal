@@ -21,6 +21,8 @@ library
     exposed-modules:
       Language.CCS.Location
       Language.CCS.Token.Raw
+      Language.CCS.Lexer.Line
+      Language.CCS.Error
     -- other-modules:
     -- other-extensions:
     build-depends:
@@ -38,6 +40,9 @@ library
       , QuasiQuotes
       , ScopedTypeVariables
       , StandaloneDeriving
+      , TypeApplications
+    other-extensions:
+      , DataKinds
 
 
 test-suite common-concrete-syntax-test
