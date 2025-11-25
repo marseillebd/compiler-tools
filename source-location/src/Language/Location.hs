@@ -1,9 +1,6 @@
-{-# LANGUAGE DataKinds #-}
-
--- FIXME extract this module to be a generic library
 -- TODO incorporate the range overlap analysis from eexprs
 -- see: https://github.com/marseillebd/eexprs/blob/c75ca4f829728d9ad978f531958c2acaf01c6086/hs/eexpr/src/Numeric/Interval/Compare.hs
-module Language.CCS.Location
+module Language.Location
   ( -- * Offsets
     -- $offsets
     Off
@@ -23,12 +20,10 @@ module Language.CCS.Location
   , Span
   , spanFromPos
   , mkSpan
-  , mkSpanOrPanic_
   ) where
 
 import Data.Function (on)
 import GHC.Records (HasField(..))
-import Language.CCS.Error (unwrapOrPanic_)
 import Text.ParserCombinators.ReadPrec (pfail)
 import Text.Read (Read(readPrec))
 
@@ -60,7 +55,7 @@ instance HasField "oneIndexed" Off Word where getField = oneIndexed
 instance Show Off where showsPrec p l = showsPrec p l.oneIndexed
 instance Read Off where
   readPrec = readPrec @Word >>= \case
-    0 -> pfail -- TODO attach a message?
+    0 -> pfail
     i -> pure $ Off (i - 1)
 
 zeroOff :: Off
@@ -174,10 +169,7 @@ mkSpan a b
   | a <= b = Just $ Span a b
   | otherwise = Nothing
 
-mkSpanOrPanic_ :: Pos -> Pos -> Span
-mkSpanOrPanic_ a b = unwrapOrPanic_ $ mkSpan a b
-
--- TODO notice that there's nothing that swaps the start/stop positions of the span
+-- NOTE there's nothing that swaps the start/stop positions of the span
 -- that is intentional, as I think it could lead to unexpected bugs
 
 instance Show Span where

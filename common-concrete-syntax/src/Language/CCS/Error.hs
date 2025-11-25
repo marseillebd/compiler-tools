@@ -21,7 +21,7 @@ internalError msg = error $ unlines
   ]
   where
   url :: String
-  url = "https://github.com/marseillebd/compiler-tools" -- FIXME be sure to update this url
+  url = "https://github.com/marseillebd/compiler-tools" -- NOTE be sure to update this url
 
 class Unwrap f where
   unwrapOr :: a -> f a -> a

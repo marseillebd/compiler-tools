@@ -15,8 +15,8 @@ import Data.Char (chr, ord)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Language.CCS.Location (Pos, startPos, incCol, incLine)
-import Language.CCS.Location (Span, spanFromPos, mkSpanOrPanic_)
+import Language.Location (Pos, startPos, incCol, incLine)
+import Language.Location (Span, spanFromPos, mkSpan)
 import Language.Nanopass (deflang)
 import Streaming.Prelude (Stream, Of(..))
 
@@ -435,4 +435,7 @@ parseHex str0 = loop 0 str0
     | 'a' <= c && c <= 'f' = loop (acc * 16 + (fromIntegral $ ord c - ord 'a' + 10)) cs
     | 'A' <= c && c <= 'F' = loop (acc * 16 + (fromIntegral $ ord c - ord 'A' + 10)) cs
     | otherwise = Nothing
+
+mkSpanOrPanic_ :: Pos -> Pos -> Span
+mkSpanOrPanic_ a b = unwrapOrPanic_ $ mkSpan a b
 
