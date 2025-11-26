@@ -3,16 +3,77 @@ There are a lot of moving peices to that, and this is where I'm putting my exper
 
 First off, I'm building this in Haskell, because it's great for making languages, and because I'm very familiar with the relevant packages.
 
+# Notes to Self
+
 Minimal next step: collect modules from files.
 - I need a tokenizer/parser
 - after any generic parsing, I'm only looking for `module <name>`, with no contents.
 - generate a file per-module with its contents (empty for now)
+- Use the unicode replacement character when decoding. That'll keep tokens separate when they're separated by an illegal encoding.
 I've put some stuff off:
 - fancier tokens, like floating point literals
 - `import` decls, and the rest of the decls ofc, but import decls would let me generate a module dependency graph also
 - module parameters, module instantiation, signatures
 
+It's all in preparation for a scope checker/renamer.
+
 # Ideas
+
+## The Vision
+
+```
+ source locations            source file                                    ─────▶ast
+ interval overlaps                │                         nanopass               │
+                                  │                                                │
+┌─────────────────────────────────│──────────┐                          ┌──────────│─────────┐
+│CCS:                             │          │                          │          │         │
+│                              Decode        │                          │     Scope Check    │
+│                                 │          │                          │          │         │
+│                                 │          │                          │          │         │
+│                             Normalize      │                          │     Type Check     │
+│                                 │          │                          │          │         │
+│                                 │          │                          │          │         │
+│                               Lexer        │                          │   Quantity Check   │
+│                                 │          │                          │          │         │
+│                                 │          │                          │          │         │
+│                          Lexeme Cleanup    │                          │       Desugar      │
+│                                 │          │                          │          │         │
+│                                 │          │                          └──────────│─────────┘
+│                              Parser        │                                     │
+│                                 │          │                                     │
+│  syntax spec mixfixes           │          │                               validated abt
+│  recognizer arrow       Mixfix Rewriting   │                                     │
+│                                 │          │                                     │
+└─────────────────────────────────│──────────┘                             ┌───────└────────┐
+                                  │                                        │                │
+                                 cst                                       │                │
+                                  │                                   ┌─────────┐       ┌───────┐
+                                  │                                   │Interpret│       │Compile│
+                            ┌────────────┐                            └─────────┘       └───────┘
+                            │ Recognizer │
+                            └────────────┘
+                                  │
+                                  │
+                                 ast─────▶
+```
+
+Edit/view: https://cascii.app/39b54
+
+## Unicode Syntax
+
+A table that holds pairs of ascii and unicode strings that should be equivalent identifiers.
+We can
+- generate documentation that uses either encoding,
+- suggest/execute replacements in the lsp or an auto formatter,
+- and maybe even use the ascii form when name mangling (which would require every unicode id to have an ascii counterpart).
+I would think it'd be defined with the mixfixes, but if we're name mangling, then it needs to apply to qualified names differently:
+  pkg A exports a unicode for `=>`, and when pkg B uses that id, it needs to use A's xlation.
+
+
+## Covering Lexer Free Monad (later, if at all)
+
+What about a free monad for the raw lexer?
+And then typed tagless representation so I can both evaluate the lexer against input, but also generate syntax files for editors?
 
 ## Incremental Compilation (delegate)
 
