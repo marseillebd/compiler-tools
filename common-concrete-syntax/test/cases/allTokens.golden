@@ -117,3 +117,105 @@ Quote 20:20--20:21 DblQuote
 Whitespace 20:21--20:22 " "
 Comment 20:22--20:41 "# codepoint escapes"
 Newline 20:41--21:1
+Newline 21:1--22:1
+Quote 22:1--22:2 SqlQuote
+Quote 22:2--22:3 SqlQuote
+Whitespace 22:3--22:4 " "
+Comment 22:4--22:19 "# empty sql str"
+Newline 22:19--23:1
+Quote 23:1--23:2 SqlQuote
+StdStr 23:2--23:13 "\\\\\\([a-z]\\)"
+Quote 23:13--23:14 SqlQuote
+Whitespace 23:14--23:15 " "
+Comment 23:15--23:30 "# basic sql str"
+Newline 23:30--24:1
+Quote 24:1--24:2 SqlQuote
+StrEscape 24:2--24:4 "'"
+Quote 24:4--24:5 SqlQuote
+Whitespace 24:5--24:6 " "
+Comment 24:6--24:42 "# sql string with only an apostrophe"
+Newline 24:42--25:1
+Quote 25:1--25:2 SqlQuote
+StdStr 25:2--25:8 "Wouldn"
+StrEscape 25:8--25:10 "'"
+StdStr 25:10--25:11 "t"
+StrEscape 25:11--25:13 "'"
+StdStr 25:13--25:15 "ve"
+Quote 25:15--25:16 SqlQuote
+Whitespace 25:16--25:17 " "
+Comment 25:17--25:41 "# sql double contraction"
+Newline 25:41--26:1
+Newline 26:1--27:1
+Comment 27:1--27:27 "### multi-line strings ###"
+Newline 27:27--28:1
+Newline 28:1--29:1
+Comment 29:1--29:8 "# empty"
+Newline 29:8--30:1
+Quote 30:1--30:4 (MlQuote "\"\"\"")
+Newline 30:4--31:1
+Quote 31:1--31:4 (MlQuote "\"\"\"")
+Newline 31:4--32:1
+Comment 32:1--32:25 "# empty with odd indents"
+Newline 32:25--33:1
+Whitespace 33:1--33:3 "  "
+Quote 33:3--33:6 (MlQuote "\"\"\"")
+Newline 33:6--34:1
+Whitespace 34:1--34:2 " "
+Quote 34:2--34:5 (MlQuote "\"\"\"")
+Newline 34:5--35:1
+Comment 35:1--35:18 "# with blank line"
+Newline 35:18--36:1
+Quote 36:1--36:4 (MlQuote "\"\"\"")
+Newline 36:4--37:1
+Whitespace 37:1--37:5 "   \t"
+Newline 37:5--38:1
+Quote 38:1--38:4 (MlQuote "\"\"\"")
+Newline 38:4--39:1
+Newline 39:1--40:1
+Comment 40:1--40:11 "# with sql"
+Newline 40:11--41:1
+Quote 41:1--41:4 (MlQuote "\"\"\"")
+Newline 41:4--42:1
+StdStr 42:1--42:9 "SELECT *"
+Newline 42:9--43:1
+StdStr 43:1--43:16 "FROM some_table"
+Newline 43:16--44:1
+Whitespace 44:1--44:3 "  "
+StdStr 44:3--44:19 "JOIN other_table"
+Newline 44:19--45:1
+StdStr 45:1--45:24 "WHERE some_col <= 65536"
+Newline 45:24--46:1
+Quote 46:1--46:4 (MlQuote "\"\"\"")
+Newline 46:4--47:1
+Newline 47:1--48:1
+Comment 48:1--48:14 "# long quotes"
+Newline 48:14--49:1
+Quote 49:1--49:6 (MlQuote "\"\"\"\"\"")
+Newline 49:6--50:1
+StdStr 50:1--50:17 "# some more code"
+Newline 50:17--51:1
+StdStr 51:1--51:4 "\"\"\""
+Newline 51:4--52:1
+StdStr 52:1--52:29 "including a nested ml string"
+Newline 52:29--53:1
+StdStr 53:1--53:4 "\"\"\""
+Newline 53:4--54:1
+Quote 54:1--54:6 (MlQuote "\"\"\"\"\"")
+Newline 54:6--55:1
+Newline 55:1--56:1
+Comment 56:1--56:15 "# named quotes"
+Newline 56:15--57:1
+Quote 57:1--57:7 (MlQuote "\"\"\"END")
+Newline 57:7--58:1
+StdStr 58:1--58:17 "# some more code"
+Newline 58:17--59:1
+StdStr 59:1--59:4 "\"\"\""
+Newline 59:4--60:1
+StdStr 60:1--60:29 "including a nested ml string"
+Newline 60:29--61:1
+StdStr 61:1--61:4 "\"\"\""
+Newline 61:4--62:1
+Whitespace 62:1--62:3 "  "
+Quote 62:3--62:9 (MlQuote "\"\"\"END")
+Newline 62:9--63:1
+Newline 63:1--64:1

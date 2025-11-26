@@ -18,3 +18,46 @@ a0!$%&*+-/<=>?@^_|~ # an identifier with all the characters
 " # unterminated string
 "\0\a\b\e\f\n\r\t\v\'\"\`\\\&" # basic escapes
 "\x1aaa\udead\&beef" # codepoint escapes
+
+'' # empty sql str
+'\\\([a-z]\)' # basic sql str
+'''' # sql string with only an apostrophe
+'Wouldn''t''ve' # sql double contraction
+
+### multi-line strings ###
+
+# empty
+"""
+"""
+# empty with odd indents
+  """
+ """
+# with blank line
+"""
+   	
+"""
+
+# with sql
+"""
+SELECT *
+FROM some_table
+  JOIN other_table
+WHERE some_col <= 65536
+"""
+
+# long quotes
+"""""
+# some more code
+"""
+including a nested ml string
+"""
+"""""
+
+# named quotes
+"""END
+# some more code
+"""
+including a nested ml string
+"""
+  """END
+

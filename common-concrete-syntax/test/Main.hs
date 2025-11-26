@@ -16,7 +16,6 @@ main = defaultMain $ testGroup "Tests"
     [ golden "test all legal raw tokens at once" "allTokens" $ \input -> do
       let output = pipeline input
       -- TODO test numbers, signed numbers, non-decimal, floating
-      -- TODO test strings, ml strings
       pure $ T.unlines $ T.pack . show <$> output
     , golden "empty input file has no tokens" "noTokens" $ \input -> do
       let output = pipeline input

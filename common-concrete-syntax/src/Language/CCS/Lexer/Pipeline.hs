@@ -114,7 +114,7 @@ data LexMode = StdLex | SqLex | DqLex | TqLex Text
 -- >    │                                     └─────┘
 -- >    │
 -- >    │                                                ┌───────┐
--- >    │──▶ ' ────────────────────▶ OpenStr ───────────▶│ sqStr │
+-- >    │──▶ ' ────────────────────▶ OpenStr ───────────▶│ sqstr │
 -- >    │                                                └───────┘
 -- >    │                                                ┌───────┐
 -- >    │──▶ "(?!"")|` ────────────▶ OpenStr ───────────▶│ dqstr │
@@ -130,11 +130,8 @@ data LexMode = StdLex | SqLex | DqLex | TqLex Text
 -- >                                    │               │
 -- >                                    │◀──────────────┘
 -- >                                    │                ┌───────┐
--- >                                    └──▶ $ ─────────▶│ tqStr │
+-- >                                    └──▶ $ ─────────▶│ tqstr │
 -- >                                                     └───────┘
--- >
--- >
--- > Edit/view: https://cascii.app/0c065
 
 stdLex :: Pos -> (Char, Text) -> LexerStep
 stdLex l (c, cs) = case classify c of
@@ -193,9 +190,55 @@ stdLex l (c, cs) = case classify c of
     let (ill, r, rest) = _takeClasses (==Ill) (l, c, cs)
      in (Raw.Illegal l ill, Right (r, rest), StdLex)
 
+-- > ┌───────┐
+-- > │ sqstr │◀───────────────────────────────┐
+-- > └───────┘                                │
+-- >     │                                    │
+-- >     │                                    │
+-- >     │                                    │
+-- >     │──▶ [^'] ──▶ [^']* ──▶ Unescaped ──▶│
+-- >     │                                    │
+-- >     │                                    │
+-- >     │──▶ '' ──────────────▶ Escape ─────▶│
+-- >     │
+-- >     │
+-- >     │                                 ┌─────┐
+-- >     │──▶ '(?!') ────▶ CloseStr ──────▶│ std │
+-- >                                       └─────┘
+
 sqLex :: Pos -> (Char, Text) -> LexerStep
-sqLex l (c, cs) = placeholder $
-  (Raw.Illegal l (T.singleton c), Right (incCol l, cs), StdLex)
+sqLex l (c, cs) = case classify c of
+  SQuote -> case cs of
+  -- escaped sequence
+    c' T.:< rest | classify c' == SQuote ->
+      (Raw.StrEscape l "\'", Right (incCol $ incCol l, rest), SqLex)
+  -- end of string
+    _ -> (Raw.Quote l Raw.SqlQuote, Right (incCol l, cs), StdLex)
+  -- standard string part
+  _ ->
+    let (str, r, rest) = _takeClasses (/=SQuote) (l, c, cs)
+     in (Raw.StdStr l str, Right (r, rest), SqLex)
+
+-- |
+-- > ┌───────┐
+-- > │ dqstr │◀────────────────────────────────────────────────┐
+-- > └───────┘                                                 │
+-- >     │                                                     │
+-- >     │                                                     │
+-- >     │                                                     │
+-- >     │──▶ [^"`\\] ──▶ [^"`\\]* ─────────────▶ Unescaped ──▶│
+-- >     │                                                     │
+-- >     │                                                     │
+-- >     │──▶ \\ ──┐──▶ [0abefnrt'"`\\&] ───┐                  │
+-- >     │         │                        │                  │
+-- >     │         │──▶ x[:hex:]{2}      ───│──▶  Escape ─────▶│
+-- >     │         │                        │
+-- >     │         │──▶ u[:hex:]+        ───┘
+-- >     │
+-- >     │
+-- >     │                                                  ┌─────┐
+-- >     │──▶ ["`] ─────────────────────▶ CloseStr ────────▶│ std │
+-- >                                                        └─────┘
 
 dqLex :: Pos -> (Char, Text) -> LexerStep
 dqLex l (c, cs) = case classify c of
@@ -258,9 +301,35 @@ escapeU l c c' cs' =
               _ -> Raw.Illegal l str
     in (tok, Right (r, rest), DqLex)
 
+-- |
+-- >   ┌───────┐
+-- >   │ tqstr │◀─────────────────────────────────┐
+-- >   └───────┘                                  │
+-- >       │                                      │
+-- >       │                                      │
+-- >       │──▶ [\t ] ──▶ [\t +] ──▶ Lws ────────▶│
+-- >       │                                      │
+-- >       ▼                                      │
+-- >                                              │
+-- > is delimiter? ─── no ──▶ .+ ──▶ Unescaped ──▶│
+-- >
+-- >       │
+-- >                                           ┌─────┐
+-- >      yes ───────────▶ CloseStr ──────────▶│ std │
+-- >                                           └─────┘
+-- >
+-- > the delimiter will match the /"{3,}[A-Za-z]*/ found when first entering tqstr
 
 tqLex :: Text -> Pos -> (Char, Text) -> LexerStep
-tqLex delim l (c, cs) = unimplemented "triple quotes"
+tqLex delim l (c, cs) = case classify c of
+  Lws ->
+    let (lws, r, rest) = _takeClasses (==Lws) (l, c, cs)
+     in (Raw.Whitespace l lws, Right (r, rest), TqLex delim)
+  _ | str <- c T.:< cs -> case T.stripPrefix delim str of
+    Nothing -> (Raw.StdStr l str, Left [], TqLex delim)
+    Just rest ->
+      let r = advInLine l delim
+       in (Raw.Quote l (Raw.MlQuote delim), Right (r, rest), StdLex)
 
 data Classify
   = Id0
