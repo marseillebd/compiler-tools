@@ -11,12 +11,12 @@ module Language.CCS.Lexer.Pipeline
 
 import Prelude hiding (lex, lines)
 
-import Data.Char (chr, ord, isHexDigit)
+import Data.Char (chr, ord, isOctDigit, isDigit, isHexDigit, toLower)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
-import Language.CCS.Error (unimplemented, placeholder, internalError, unwrapOrPanic_)
+import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
 import Language.Location (Span, mkSpan, spanFromPos, Pos, startPos, incLine, incCol)
 
 import qualified Data.Text as T
@@ -88,9 +88,13 @@ linesFrom l str = Line
 ------ Coverage Lexer ------
 ----------------------------
 
-data LexMode = StdLex | SqLex | DqLex | TqLex Text
+data LexMode
+  = StdLex
+  | NumLex Raw.Radix
+  | SqLex
+  | DqLex
+  | TqLex Text
 
--- |
 -- > ┌─────┐
 -- > │ std │◀───────────────────────────────────────────────┐
 -- > └─────┘                                                │
@@ -107,14 +111,15 @@ data LexMode = StdLex | SqLex | DqLex | TqLex Text
 -- >    │                                                   │
 -- >    │──▶ [:id0:] ────────┐                              │
 -- >    │                    │─▶ [:id:]* ──▶ Identifier ───▶│
--- >    │──▶ [+-](?![^0-9]) ─┘                              │
--- >    │                                                   │
--- >    │                                     ┌─────┐       │
--- >    │──▶ [+-]?[0-9] ─────────────────────▶│ num │──────▶│
--- >    │                                     └─────┘
+-- >    │──▶ [+-](?![^0-9]) ─┘
+-- >    │
+-- >    │
+-- >    │──▶ [+-](?:[0-9]) ──▶ Sign ──┐                  ┌─────┐
+-- >    │                             │─────────────────▶│ num │
+-- >    │──▶ (?:0-9]) ────────────────┘                  └─────┘
 -- >    │
 -- >    │                                                ┌───────┐
--- >    │──▶ ' ────────────────────▶ OpenStr ───────────▶│ sqstr │
+-- >    │──▶ ' ────────────────────▶ OpenStr ───────────▶│ sqStr │
 -- >    │                                                └───────┘
 -- >    │                                                ┌───────┐
 -- >    │──▶ "(?!"")|` ────────────▶ OpenStr ───────────▶│ dqstr │
@@ -130,7 +135,7 @@ data LexMode = StdLex | SqLex | DqLex | TqLex Text
 -- >                                    │               │
 -- >                                    │◀──────────────┘
 -- >                                    │                ┌───────┐
--- >                                    └──▶ $ ─────────▶│ tqstr │
+-- >                                    └──▶ $ ─────────▶│ tqStr │
 -- >                                                     └───────┘
 
 stdLex :: Pos -> (Char, Text) -> LexerStep
@@ -147,17 +152,16 @@ stdLex l (c, cs) = case classify c of
   Id0 ->
     let (sym, r, rest) = _takeClasses (`elem` [Id0, Sign, Num]) (l, c, cs)
      in (Raw.Symbol l sym, Right (r, rest), StdLex)
-  Sign | True <- case cs of
-       { T.Empty -> True
-       ; c' T.:< _ -> classify c' /= Num
-       } ->
-    let (sym, r, rest) = _takeClasses (`elem` [Id0, Sign, Num]) (l, c, cs)
-     in (Raw.Symbol l sym, Right (r, rest), StdLex)
+  Sign -> case cs of
+    T.Empty -> (Raw.Symbol l (T.singleton c), Left [], StdLex)
+    c' T.:< _ | classify c' /= Num ->
+      let (sym, r, rest) = _takeClasses (`elem` [Id0, Sign, Num]) (l, c, cs)
+      in (Raw.Symbol l sym, Right (r, rest), StdLex)
   -- numbers
-      | otherwise -> placeholder $
-        -- unimplemented "signed numbers" -- DELME
-        (Raw.Illegal l (T.singleton c), Right (incCol l, cs), StdLex)
-  Num -> placeholder $ (Raw.Illegal l (T.singleton c), Right (incCol l, cs), StdLex)
+      | otherwise ->
+        let sign = unwrapOrPanic_ $ parseSign c
+         in (Raw.SignTok l sign, Right (incCol l, cs), NumLex Raw.Base10)
+  Num -> numLex Raw.Base10 l (c, cs)
   -- inline strings
   SQuote ->
     (Raw.Quote l Raw.SqlQuote, Right (incCol l, cs), SqLex)
@@ -189,6 +193,61 @@ stdLex l (c, cs) = case classify c of
   Ill ->
     let (ill, r, rest) = _takeClasses (==Ill) (l, c, cs)
      in (Raw.Illegal l ill, Right (r, rest), StdLex)
+
+-- > ┌─────┐
+-- > │ num │◀──────────────────────────────┐
+-- > └─────┘                               │
+-- >    │                                  │
+-- >    │                                  │
+-- >    │──▶ [+-] ────────▶ Sign ─────────▶│
+-- >    │                                  │
+-- >    │                                  │
+-- >    │──▶ 0[boxBOX] ───▶ Radix ────────▶│
+-- >    │                                  │
+-- >    │                                  │
+-- >    │──▶ [:digit:]+ ──▶ Digits ───────▶│
+-- >    │                                  │
+-- >    │                                  │
+-- >    │──▶ [.] ─────────▶ Punctuation ──▶│
+-- >    │                                  │
+-- >    │                                  │
+-- >    │──▶ [:power:] ───▶ Power ────────▶│
+-- >    │
+-- >    │
+-- >    │                               ┌─────┐
+-- >    │──▶(?![:digit::power:.+-]) ───▶│ std │
+-- >                                    └─────┘
+
+numLex :: Raw.Radix -> Pos -> (Char, Text) -> LexerStep
+numLex radix l (c, cs) = if
+  -- sign
+  | Just sign <- parseSign c ->
+     (Raw.SignTok l sign, Right (incCol l, cs), NumLex radix)
+  -- radix
+  | c == '0'
+  , c' T.:< rest <- cs
+  , Just newRadix <- parseRadix c' ->
+    let r = incCol . incCol $ l
+     in (Raw.Radix l newRadix, Right (r, rest), NumLex newRadix)
+  -- digits
+  | isDigitIn radix c ->
+    let (digits, r, rest) = _spanBy (isDigitIn radix) (incCol l, cs)
+        (i, len) = unwrapOrPanic_ $ (parseDigitsIn radix) (c : T.unpack digits)
+     in (Raw.Digits l i len, Right (r, rest), NumLex radix)
+  -- "decimal" point
+  | c == '.' ->
+    (Raw.Punctuation l Raw.Dot, Right (incCol l, cs), NumLex radix)
+  -- "times <radix> to the"
+  | toLower c == powerLetter radix ->
+     (Raw.Power l, Right (incCol l, cs), NumLex Raw.Base10)
+  -- end of number parts, revert to standard
+  | otherwise -> stdLex l (c, cs)
+
+powerLetter :: Raw.Radix -> Char
+powerLetter Raw.Base2 = 'p'
+powerLetter Raw.Base8 = 'p'
+powerLetter Raw.Base10 = 'e'
+powerLetter Raw.Base16 = 'p'
 
 -- > ┌───────┐
 -- > │ sqstr │◀───────────────────────────────┐
@@ -294,7 +353,7 @@ escapeU ::
   -> LexerStep
 escapeU l c c' cs' =
   let hexL = advInLine l (T.pack [c, c'])
-      (str, r, rest) = _spanHex (hexL, cs')
+      (str, r, rest) = _spanBy isHexDigit (hexL, cs')
       tok = case parseHex (T.unpack str) of
               Just n | n <= 0x10FFFF ->
                 Raw.StrEscape l [chr $ fromIntegral n]
@@ -427,11 +486,51 @@ _spanClasses f (l, cs) = (ok, r, rest)
   (ok, rest) = T.span (f . classify) cs
   r = advInLine l ok
 
-_spanHex :: (Pos, Text) -> (Text, Pos, Text)
-_spanHex (l, cs) = (ok, r, rest)
+_spanBy :: (Char -> Bool) -> (Pos, Text) -> (Text, Pos, Text)
+_spanBy f (l, cs) = (ok, r, rest)
   where
-  (ok, rest) = T.span isHexDigit cs
+  (ok, rest) = T.span f cs
   r = advInLine l ok
+
+parseRadix :: Char -> Maybe Raw.Radix
+parseRadix c = case toLower c of
+  'b' -> Just Raw.Base2
+  'o' -> Just Raw.Base8
+  'x' -> Just Raw.Base16
+  _ -> Nothing
+
+parseSign :: Char -> Maybe Raw.Sign
+parseSign '+' = Just Raw.Positive
+parseSign '-' = Just Raw.Negative
+parseSign _ = Nothing
+
+isDigitIn :: Raw.Radix -> Char -> Bool
+isDigitIn _ '_' = True
+isDigitIn Raw.Base2 c = '0' == c || c == '1'
+isDigitIn Raw.Base8 c = isOctDigit c
+isDigitIn Raw.Base10 c = isDigit c
+isDigitIn Raw.Base16 c = isHexDigit c
+
+parseDigitsIn :: Raw.Radix -> String -> Maybe (Integer, Int)
+parseDigitsIn _ "" = Nothing
+parseDigitsIn radix str0 = case radix of
+  Raw.Base2 -> parseWith 2
+  Raw.Base8 -> parseWith 8
+  Raw.Base10 -> parseWith 10
+  Raw.Base16 -> parseWith 16
+  where
+  allDigits = "0123456789abcdef"
+  parseWith :: Int -> Maybe (Integer, Int)
+  parseWith base =
+    let loop :: (Integer, Int) -> String -> Maybe (Integer, Int)
+        loop acc "" = Just acc
+        loop acc ('_' : cs) = loop acc cs
+        loop (num, len) (c : cs) = do
+          i <- T.findIndex (toLower c ==) digits
+          let num' = num * (fromIntegral base) + (fromIntegral i)
+          loop (num', len + 1) cs
+        digits = T.take base allDigits
+     in loop (0, 0) str0
 
 parseHex :: String -> Maybe Integer
 parseHex "" = Nothing
@@ -464,12 +563,14 @@ lexLineFrom mode line = case (line.content, line.eol) of
   where
   lex1 = case mode of
     StdLex -> stdLex
+    NumLex radix -> numLex radix
     SqLex -> sqLex
     DqLex -> dqLex
     TqLex delim -> tqLex delim
   -- | In case we get to the end of line unexpectedly, we need to reset the mode to standard.
   recoverMode = case mode of
     StdLex -> StdLex
+    NumLex _ -> StdLex
     SqLex -> StdLex
     DqLex -> StdLex
     TqLex delim -> TqLex delim

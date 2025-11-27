@@ -7,6 +7,8 @@ module Language.CCS.Token.Raw
   ( CCS(..)
   , Token(..)
   , annotation
+  , Sign(..)
+  , Radix(..)
   , PunctToken(..)
   , Enclose(..)
   , QuoteToken(..)
@@ -22,7 +24,10 @@ import Language.Nanopass (deflang)
 
   (Token
     (Symbol loc Text)
-    (IntLit loc Integer)
+    (SignTok loc Sign)
+    (Radix loc Radix)
+    (Digits loc Integer Int)
+    (Power loc)
     (Punctuation loc PunctToken)
     (Quote loc QuoteToken)
     (StdStr loc Text)
@@ -36,14 +41,16 @@ import Language.Nanopass (deflang)
 )
 |]
 -- TODO the argument for Symbol should enforce the invariants on how Symbols may be spelled
--- TODO FloLit for floating point literals
 
 deriving instance Show a => Show (Token a)
 deriving instance Functor Token
 
 annotation :: Token a -> a
 annotation (Symbol a _) = a
-annotation (IntLit a _) = a
+annotation (SignTok a _) = a
+annotation (Radix a _) = a
+annotation (Digits a _ _) = a
+annotation (Power a) = a
 annotation (Punctuation a _) = a
 annotation (Quote a _) = a
 annotation (StdStr a _) = a
@@ -63,12 +70,31 @@ data PunctToken
 data Enclose = Round | Square | Curly
   deriving (Eq, Show)
 
+data Sign = Positive | Negative
+  deriving (Eq, Show)
+
+data Radix = Base2 | Base8 | Base10 | Base16
+  deriving (Eq, Show)
+
+data FloLit
+  = Zero
+  | NegZero
+  | BinFloat
+    { magnitude :: Integer
+    , exponent :: Integer
+    }
+  | DecFloat
+    { magnitude :: Integer
+    , exponent :: Integer
+    }
+  deriving (Eq, Show)
+
+
 data QuoteToken
   = SqlQuote
   | DblQuote
   | Backtick
   | MlQuote Text
-  -- TODO multi-line string quote
   deriving (Eq, Show)
 
 data StringPart

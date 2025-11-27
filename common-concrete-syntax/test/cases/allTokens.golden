@@ -219,3 +219,83 @@ Whitespace 62:1--62:3 "  "
 Quote 62:3--62:9 (MlQuote "\"\"\"END")
 Newline 62:9--63:1
 Newline 63:1--64:1
+Digits 64:1--64:2 0 1
+Whitespace 64:2--64:3 " "
+Digits 64:3--64:6 137 3
+Whitespace 64:6--64:7 " "
+SignTok 64:7--64:8 Positive
+Digits 64:8--64:9 4 1
+Whitespace 64:9--64:10 " "
+SignTok 64:10--64:11 Negative
+Digits 64:11--64:13 69 2
+Whitespace 64:13--64:14 " "
+Digits 64:14--64:15 0 1
+Punctuation 64:15--64:16 Dot
+Digits 64:16--64:17 0 1
+Whitespace 64:17--64:18 " "
+Digits 64:18--64:19 1 1
+Punctuation 64:19--64:20 Dot
+Digits 64:20--64:21 0 1
+Whitespace 64:21--64:22 " "
+SignTok 64:22--64:23 Negative
+Digits 64:23--64:24 0 1
+Punctuation 64:24--64:25 Dot
+Digits 64:25--64:26 0 1
+Whitespace 64:26--64:27 " "
+Comment 64:27--64:44 "# decimal numbers"
+Newline 64:44--65:1
+Digits 65:1--65:2 1 1
+Power 65:2--65:3
+Digits 65:3--65:4 4 1
+Whitespace 65:4--65:5 " "
+Digits 65:5--65:6 1 1
+Punctuation 65:6--65:7 Dot
+Digits 65:7--65:8 0 1
+Power 65:8--65:9
+SignTok 65:9--65:10 Negative
+Digits 65:10--65:13 100 3
+Whitespace 65:13--65:14 " "
+SignTok 65:14--65:15 Negative
+Digits 65:15--65:16 0 1
+Punctuation 65:16--65:17 Dot
+Digits 65:17--65:18 0 1
+Power 65:18--65:19
+Digits 65:19--65:20 4 1
+Punctuation 65:20--65:21 Dot
+Digits 65:21--65:23 20 2
+Power 65:23--65:24
+Digits 65:24--65:25 7 1
+Whitespace 65:25--65:26 " "
+Comment 65:26--65:37 "# exponents"
+Newline 65:37--66:1
+Radix 66:1--66:3 Base2
+Digits 66:3--66:7 11 4
+Whitespace 66:7--66:8 " "
+Radix 66:8--66:10 Base8
+Digits 66:10--66:13 83 3
+Whitespace 66:13--66:14 " "
+Radix 66:14--66:16 Base16
+Digits 66:16--66:19 2570 3
+Whitespace 66:19--66:20 " "
+Radix 66:20--66:22 Base16
+Digits 66:22--66:24 66 2
+Power 66:24--66:25
+SignTok 66:25--66:26 Negative
+Digits 66:26--66:27 0 1
+Symbol 66:27--66:28 "A"
+Whitespace 66:28--66:29 " "
+Comment 66:29--66:42 "# other bases"
+Newline 66:42--67:1
+Digits 67:1--67:10 1000000 7
+Whitespace 67:10--67:11 " "
+Radix 67:11--67:13 Base2
+Digits 67:13--67:22 219 8
+Whitespace 67:22--67:23 " "
+Radix 67:23--67:25 Base8
+Digits 67:25--67:32 42798 6
+Whitespace 67:32--67:33 " "
+Radix 67:33--67:35 Base16
+Digits 67:35--67:44 3735928559 8
+Whitespace 67:44--67:45 " "
+Comment 67:45--67:63 "# digit separators"
+Newline 67:63--68:1

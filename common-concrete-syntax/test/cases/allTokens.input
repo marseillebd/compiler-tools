@@ -61,3 +61,7 @@ including a nested ml string
 """
   """END
 
+0 137 +4 -69 0.0 1.0 -0.0 # decimal numbers
+1e4 1.0e-100 -0.0e4.20e7 # exponents
+0B1011 0o123 0xA0a 0x42p-0A # other bases
+1_000_000 0b1101_1011 0O123_456 0XDEAD_BEEF # digit separators
