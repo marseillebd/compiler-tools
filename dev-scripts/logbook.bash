@@ -11,4 +11,4 @@ else
   today="$(date -I)"
 fi
 
-exec $EDITOR "NOTES/labbook/${today}.md"
+exec $EDITOR "NOTES/logbook/${today}.md"
