@@ -23,8 +23,9 @@ common common
 library
     import:           common
     exposed-modules:
-      Language.CCS.Token.Raw
       Language.CCS.Lexer.Line
+      Language.CCS.Lexer.Morpheme
+      Language.CCS.Lexer.Morpheme.LineEndings
       Language.CCS.Lexer.Pipeline
       Language.CCS.Error
     -- other-modules:
@@ -36,7 +37,9 @@ library
     hs-source-dirs:   src
     default-language: Haskell2010
     default-extensions:
+      , DeriveFunctor
       , LambdaCase
+      , MultiWayIf
       , NamedFieldPuns
       , OverloadedRecordDot
       , OverloadedStrings
@@ -45,7 +48,6 @@ library
       , StandaloneDeriving
       , TypeApplications
     other-extensions:
-      , DataKinds
 
 
 test-suite common-concrete-syntax-test

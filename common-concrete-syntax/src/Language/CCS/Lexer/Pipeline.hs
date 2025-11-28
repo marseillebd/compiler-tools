@@ -1,6 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE MultiWayIf #-}
-
 module Language.CCS.Lexer.Pipeline
   ( pipeline
   , pipelineFrom
@@ -18,18 +15,21 @@ import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
 import Language.Location (Span, mkSpan, spanFromPos, Pos, startPos, incLine, incCol)
+import Language.CCS.Lexer.Morpheme (Token(..), annotation)
+import Language.CCS.Lexer.Morpheme (QuoteType(..), EolType(..))
+import Language.CCS.Lexer.Morpheme (PunctuationType(..), BracketType(..))
+import Language.CCS.Lexer.Morpheme (Sign(..), Radix(..))
 
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text.Encoding.Error as Codec
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Codec
-import qualified Language.CCS.Token.Raw as Raw -- DELME
 
-pipeline :: LBS.ByteString -> [Raw.Token Span]
+pipeline :: LBS.ByteString -> [Token Span]
 pipeline = pipelineFrom startPos
 
-pipelineFrom :: Pos -> LBS.ByteString -> [Raw.Token Span]
+pipelineFrom :: Pos -> LBS.ByteString -> [Token Span]
 pipelineFrom pos0 bytes = bytes
   & decode
   & linesFrom pos0
@@ -55,13 +55,8 @@ decode bytes = placeholder
 data Line = Line
   { content :: Text
   , loc :: Span
-  , eol :: Eol
+  , eol :: EolType
   }
-data Eol
-  = LF
-  | CRLF
-  | CR
-  | Eof
 
 lines :: LT.Text -> [Line]
 lines = linesFrom startPos
@@ -90,7 +85,7 @@ linesFrom l str = Line
 
 data LexMode
   = StdLex
-  | NumLex Raw.Radix
+  | NumLex Radix
   | SqLex
   | DqLex
   | TqLex Text
@@ -141,34 +136,34 @@ data LexMode
 stdLex :: Pos -> (Char, Text) -> LexerStep
 stdLex l (c, cs) = case classify c of
   -- comments
-  Hash -> (Raw.Comment l (c T.:< cs), Left [], StdLex)
+  Hash -> (Comment l (c T.:< cs), Left [], StdLex)
   -- linear whitespace
   Lws ->
     let (lws, r, rest) = _takeClasses (==Lws) (l, c, cs)
-     in (Raw.Whitespace l lws, Right (r, rest), StdLex)
+     in (Whitespace l lws, Right (r, rest), StdLex)
   -- punctuation
-  Punct pTy -> (Raw.Punctuation l pTy, Right (incCol l, cs), StdLex)
+  Punct pTy -> (Punctuation l pTy, Right (incCol l, cs), StdLex)
   -- symbols
   Id0 ->
-    let (sym, r, rest) = _takeClasses (`elem` [Id0, Sign, Num]) (l, c, cs)
-     in (Raw.Symbol l sym, Right (r, rest), StdLex)
-  Sign -> case cs of
-    T.Empty -> (Raw.Symbol l (T.singleton c), Left [], StdLex)
+    let (sym, r, rest) = _takeClasses (`elem` [Id0, Sgn, Num]) (l, c, cs)
+     in (Symbol l sym, Right (r, rest), StdLex)
+  Sgn -> case cs of
+    T.Empty -> (Symbol l (T.singleton c), Left [], StdLex)
     c' T.:< _ | classify c' /= Num ->
-      let (sym, r, rest) = _takeClasses (`elem` [Id0, Sign, Num]) (l, c, cs)
-      in (Raw.Symbol l sym, Right (r, rest), StdLex)
+      let (sym, r, rest) = _takeClasses (`elem` [Id0, Sgn, Num]) (l, c, cs)
+      in (Symbol l sym, Right (r, rest), StdLex)
   -- numbers
       | otherwise ->
         let sign = unwrapOrPanic_ $ parseSign c
-         in (Raw.SignTok l sign, Right (incCol l, cs), NumLex Raw.Base10)
-  Num -> numLex Raw.Base10 l (c, cs)
+         in (Sign l sign, Right (incCol l, cs), NumLex Base10)
+  Num -> numLex Base10 l (c, cs)
   -- inline strings
   SQuote ->
-    (Raw.Quote l Raw.SqlQuote, Right (incCol l, cs), SqLex)
+    (Quote l SqlQuote, Right (incCol l, cs), SqLex)
   BtQuote ->
-    (Raw.Quote l Raw.Backtick, Right (incCol l, cs), DqLex)
+    (Quote l Backtick, Right (incCol l, cs), DqLex)
   DQuote | not $ "\"\"" `T.isPrefixOf` cs ->
-    (Raw.Quote l Raw.DblQuote, Right (incCol l, cs), DqLex)
+    (Quote l DblQuote, Right (incCol l, cs), DqLex)
   -- multiline strings
          | otherwise ->
     let (quotes, nameL, afterQuotes) = _takeClasses (==DQuote) (l, c, cs)
@@ -179,20 +174,20 @@ stdLex l (c, cs) = case classify c of
         delim = quotes <> name
         extraTokens = catMaybes
           [ if T.null lws then Nothing else Just $
-            Raw.Whitespace lwsL lws
+            Whitespace lwsL lws
           , if T.null ill then Nothing else Just $
-            Raw.Illegal illL ill
+            Illegal illL ill
           , case afterIll of
             T.Empty -> Nothing
             hash T.:< _
-              | classify hash == Hash -> Just $ Raw.Comment commentL afterIll
+              | classify hash == Hash -> Just $ Comment commentL afterIll
               | otherwise -> internalError "did not consume until comment or eol after start of multi-line string"
           ]
-     in (Raw.Quote l (Raw.MlQuote delim), Left extraTokens, TqLex delim)
+     in (Quote l (MlQuote delim), Left extraTokens, TqLex delim)
   -- error recovery
   Ill ->
     let (ill, r, rest) = _takeClasses (==Ill) (l, c, cs)
-     in (Raw.Illegal l ill, Right (r, rest), StdLex)
+     in (Illegal l ill, Right (r, rest), StdLex)
 
 -- > ┌─────┐
 -- > │ num │◀──────────────────────────────┐
@@ -218,36 +213,36 @@ stdLex l (c, cs) = case classify c of
 -- >    │──▶(?![:digit::power:.+-]) ───▶│ std │
 -- >                                    └─────┘
 
-numLex :: Raw.Radix -> Pos -> (Char, Text) -> LexerStep
+numLex :: Radix -> Pos -> (Char, Text) -> LexerStep
 numLex radix l (c, cs) = if
   -- sign
   | Just sign <- parseSign c ->
-     (Raw.SignTok l sign, Right (incCol l, cs), NumLex radix)
+     (Sign l sign, Right (incCol l, cs), NumLex radix)
   -- radix
   | c == '0'
   , c' T.:< rest <- cs
   , Just newRadix <- parseRadix c' ->
     let r = incCol . incCol $ l
-     in (Raw.Radix l newRadix, Right (r, rest), NumLex newRadix)
+     in (Radix l newRadix, Right (r, rest), NumLex newRadix)
   -- digits
   | isDigitIn radix c ->
     let (digits, r, rest) = _spanBy (isDigitIn radix) (incCol l, cs)
         (i, len) = unwrapOrPanic_ $ (parseDigitsIn radix) (c : T.unpack digits)
-     in (Raw.Digits l i len, Right (r, rest), NumLex radix)
+     in (Digits l i len, Right (r, rest), NumLex radix)
   -- "decimal" point
   | c == '.' ->
-    (Raw.Punctuation l Raw.Dot, Right (incCol l, cs), NumLex radix)
+    (Punctuation l Dot, Right (incCol l, cs), NumLex radix)
   -- "times <radix> to the"
   | toLower c == powerLetter radix ->
-     (Raw.Power l, Right (incCol l, cs), NumLex Raw.Base10)
+     (Power l, Right (incCol l, cs), NumLex Base10)
   -- end of number parts, revert to standard
   | otherwise -> stdLex l (c, cs)
 
-powerLetter :: Raw.Radix -> Char
-powerLetter Raw.Base2 = 'p'
-powerLetter Raw.Base8 = 'p'
-powerLetter Raw.Base10 = 'e'
-powerLetter Raw.Base16 = 'p'
+powerLetter :: Radix -> Char
+powerLetter Base2 = 'p'
+powerLetter Base8 = 'p'
+powerLetter Base10 = 'e'
+powerLetter Base16 = 'p'
 
 -- > ┌───────┐
 -- > │ sqstr │◀───────────────────────────────┐
@@ -270,13 +265,13 @@ sqLex l (c, cs) = case classify c of
   SQuote -> case cs of
   -- escaped sequence
     c' T.:< rest | classify c' == SQuote ->
-      (Raw.StrEscape l "\'", Right (incCol $ incCol l, rest), SqLex)
+      (StrEscape l "\'", Right (incCol $ incCol l, rest), SqLex)
   -- end of string
-    _ -> (Raw.Quote l Raw.SqlQuote, Right (incCol l, cs), StdLex)
+    _ -> (Quote l SqlQuote, Right (incCol l, cs), StdLex)
   -- standard string part
   _ ->
     let (str, r, rest) = _takeClasses (/=SQuote) (l, c, cs)
-     in (Raw.StdStr l str, Right (r, rest), SqLex)
+     in (StdStr l str, Right (r, rest), SqLex)
 
 -- |
 -- > ┌───────┐
@@ -301,9 +296,9 @@ sqLex l (c, cs) = case classify c of
 
 dqLex :: Pos -> (Char, Text) -> LexerStep
 dqLex l (c, cs) = case classify c of
-  DQuote -> (Raw.Quote l Raw.DblQuote, Right (incCol l, cs), StdLex)
-  BtQuote -> (Raw.Quote l Raw.Backtick, Right (incCol l, cs), StdLex)
-  Punct Raw.Backslash -> case cs of
+  DQuote -> (Quote l DblQuote, Right (incCol l, cs), StdLex)
+  BtQuote -> (Quote l Backtick, Right (incCol l, cs), StdLex)
+  Punct Backslash -> case cs of
     c' T.:< cs'
     -- numeric escapes
     -- NOTE I've only allowed lowercase \x and \u sequences, with the idea that uppercase escape chars are reserved
@@ -313,17 +308,17 @@ dqLex l (c, cs) = case classify c of
     -- NOTE ascii control code mnemonics would be nice, possibly
     -- single-letter escape sequence (mostly C escapes)
       | Just str <- lookup c' stdEscapes ->
-        (Raw.StrEscape l str, Right (incCol $ incCol l, cs'), DqLex)
+        (StrEscape l str, Right (incCol $ incCol l, cs'), DqLex)
     -- unrecognized escape
       | otherwise ->
         let str = T.pack [c, c']
             r = advInLine l str
-         in (Raw.Illegal l str, Right (r, cs'), DqLex)
+         in (Illegal l str, Right (r, cs'), DqLex)
     -- unexpected end of string
-    T.Empty -> (Raw.Illegal l (T.singleton c), Left [], StdLex)
+    T.Empty -> (Illegal l (T.singleton c), Left [], StdLex)
   _ ->
-    let (str, r, rest) = _takeClasses (`notElem` [DQuote, BtQuote, Punct Raw.Backslash]) (l, c, cs)
-     in (Raw.StdStr l str, Right (r, rest), DqLex)
+    let (str, r, rest) = _takeClasses (`notElem` [DQuote, BtQuote, Punct Backslash]) (l, c, cs)
+     in (StdStr l str, Right (r, rest), DqLex)
 --- helpers for dqStr ---
 escapeX ::
       Pos -- ^ left of the backslash
@@ -334,17 +329,17 @@ escapeX ::
 escapeX l c c' cs' = case cs' of
   (c1 T.:< c2 T.:< rest) ->
     let tok = case parseHex [c1, c2] of
-                Just n -> Raw.StrEscape l [chr $ fromInteger n]
-                Nothing -> Raw.Illegal l str
+                Just n -> StrEscape l [chr $ fromInteger n]
+                Nothing -> Illegal l str
         str = T.pack [c, c', c1, c2]
         r = advInLine l str
     in (tok, Right (r, rest), DqLex)
   (c1 T.:< T.Empty) ->
     let str = T.pack [c, c', c1]
-      in (Raw.Illegal l str, Left [], StdLex)
+      in (Illegal l str, Left [], StdLex)
   T.Empty ->
     let str = T.pack [c, c']
-      in (Raw.Illegal l str, Left [], StdLex)
+      in (Illegal l str, Left [], StdLex)
 escapeU ::
       Pos -- ^ left of the backslash
   -> Char -- ^ the backslash
@@ -356,8 +351,8 @@ escapeU l c c' cs' =
       (str, r, rest) = _spanBy isHexDigit (hexL, cs')
       tok = case parseHex (T.unpack str) of
               Just n | n <= 0x10FFFF ->
-                Raw.StrEscape l [chr $ fromIntegral n]
-              _ -> Raw.Illegal l str
+                StrEscape l [chr $ fromIntegral n]
+              _ -> Illegal l str
     in (tok, Right (r, rest), DqLex)
 
 -- |
@@ -383,19 +378,19 @@ tqLex :: Text -> Pos -> (Char, Text) -> LexerStep
 tqLex delim l (c, cs) = case classify c of
   Lws ->
     let (lws, r, rest) = _takeClasses (==Lws) (l, c, cs)
-     in (Raw.Whitespace l lws, Right (r, rest), TqLex delim)
+     in (Whitespace l lws, Right (r, rest), TqLex delim)
   _ | str <- c T.:< cs -> case T.stripPrefix delim str of
-    Nothing -> (Raw.StdStr l str, Left [], TqLex delim)
+    Nothing -> (StdStr l str, Left [], TqLex delim)
     Just rest ->
       let r = advInLine l delim
-       in (Raw.Quote l (Raw.MlQuote delim), Right (r, rest), StdLex)
+       in (Quote l (MlQuote delim), Right (r, rest), StdLex)
 
 data Classify
   = Id0
   | Num
-  | Sign
+  | Sgn
   -- punctuation
-  | Punct Raw.PunctToken
+  | Punct PunctuationType
   | SQuote
   | DQuote
   | BtQuote
@@ -423,33 +418,33 @@ classify c
   | c == '%' = Id0
   | c == '&' = Id0
   | c == '\'' = SQuote
-  | c == '(' = Punct (Raw.Open Raw.Round)
-  | c == ')' = Punct (Raw.Close Raw.Round)
+  | c == '(' = Punct (Open Round)
+  | c == ')' = Punct (Close Round)
   | c == '*' = Id0
-  | c == '+' = Sign
-  | c == ',' = Punct Raw.Comma
-  | c == '-' = Sign
-  | c == '.' = Punct Raw.Dot
+  | c == '+' = Sgn
+  | c == ',' = Punct Comma
+  | c == '-' = Sgn
+  | c == '.' = Punct Dot
   | c == '/' = Id0
   | '0' <= c && c <= '9' = Num
-  | c == ':' = Punct Raw.Colon
-  | c == ';' = Punct Raw.Semicolon
+  | c == ':' = Punct Colon
+  | c == ';' = Punct Semicolon
   | c == '<' = Id0
   | c == '=' = Id0
   | c == '>' = Id0
   | c == '?' = Id0
   | c == '@' = Id0
   | 'A' <= c && c <= 'Z' = Id0
-  | c == '[' = Punct (Raw.Open Raw.Square)
-  | c == '\\' = Punct Raw.Backslash
-  | c == ']' = Punct (Raw.Close Raw.Square)
+  | c == '[' = Punct (Open Square)
+  | c == '\\' = Punct Backslash
+  | c == ']' = Punct (Close Square)
   | c == '^' = Id0
   | c == '_' = Id0
   | c == '`' = BtQuote
   | 'a' <= c && c <= 'z' = Id0
-  | c == '{' = Punct (Raw.Open Raw.Curly)
+  | c == '{' = Punct (Open Curly)
   | c == '|' = Id0
-  | c == '}' = Punct (Raw.Close Raw.Curly)
+  | c == '}' = Punct (Close Curly)
   | c == '~' = Id0
   | otherwise = Ill -- TODO this completely disallows all non-ascii outside strings and comments
 
@@ -492,32 +487,32 @@ _spanBy f (l, cs) = (ok, r, rest)
   (ok, rest) = T.span f cs
   r = advInLine l ok
 
-parseRadix :: Char -> Maybe Raw.Radix
+parseRadix :: Char -> Maybe Radix
 parseRadix c = case toLower c of
-  'b' -> Just Raw.Base2
-  'o' -> Just Raw.Base8
-  'x' -> Just Raw.Base16
+  'b' -> Just Base2
+  'o' -> Just Base8
+  'x' -> Just Base16
   _ -> Nothing
 
-parseSign :: Char -> Maybe Raw.Sign
-parseSign '+' = Just Raw.Positive
-parseSign '-' = Just Raw.Negative
+parseSign :: Char -> Maybe Sign
+parseSign '+' = Just Positive
+parseSign '-' = Just Negative
 parseSign _ = Nothing
 
-isDigitIn :: Raw.Radix -> Char -> Bool
+isDigitIn :: Radix -> Char -> Bool
 isDigitIn _ '_' = True
-isDigitIn Raw.Base2 c = '0' == c || c == '1'
-isDigitIn Raw.Base8 c = isOctDigit c
-isDigitIn Raw.Base10 c = isDigit c
-isDigitIn Raw.Base16 c = isHexDigit c
+isDigitIn Base2 c = '0' == c || c == '1'
+isDigitIn Base8 c = isOctDigit c
+isDigitIn Base10 c = isDigit c
+isDigitIn Base16 c = isHexDigit c
 
-parseDigitsIn :: Raw.Radix -> String -> Maybe (Integer, Int)
+parseDigitsIn :: Radix -> String -> Maybe (Integer, Int)
 parseDigitsIn _ "" = Nothing
 parseDigitsIn radix str0 = case radix of
-  Raw.Base2 -> parseWith 2
-  Raw.Base8 -> parseWith 8
-  Raw.Base10 -> parseWith 10
-  Raw.Base16 -> parseWith 16
+  Base2 -> parseWith 2
+  Base8 -> parseWith 8
+  Base10 -> parseWith 10
+  Base16 -> parseWith 16
   where
   allDigits = "0123456789abcdef"
   parseWith :: Int -> Maybe (Integer, Int)
@@ -546,19 +541,19 @@ parseHex str0 = loop 0 str0
 
 ------ Recursion Relation ------
 
-lex :: LexMode -> [Line] -> [Raw.Token Span]
+lex :: LexMode -> [Line] -> [Token Span]
 lex mode0 = runLinear . go mode0
   where
-  go :: LexMode -> [Line] -> Linear (Raw.Token Span) LexMode
+  go :: LexMode -> [Line] -> Linear (Token Span) LexMode
   go mode (l:ls) = lexLineFrom mode l >>= \newMode -> go newMode ls
   go mode [] = Done mode
 
-lexLineFrom :: LexMode -> Line -> Linear (Raw.Token Span) LexMode
+lexLineFrom :: LexMode -> Line -> Linear (Token Span) LexMode
 lexLineFrom mode line = case (line.content, line.eol) of
   (c T.:< cs, _) -> loopLexer line $ lex1 line.loc.start (c, cs)
   (T.Empty, Eof) -> Done recoverMode
-  (T.Empty, _) ->
-    let tok = Raw.Newline $ unwrapOrPanic_ $ mkSpan line.loc.end (incLine line.loc.end)
+  (T.Empty, ty) ->
+    let tok = Eol (unwrapOrPanic_ $ mkSpan line.loc.end (incLine line.loc.end)) ty
      in tok `More` Done recoverMode
   where
   lex1 = case mode of
@@ -577,14 +572,14 @@ lexLineFrom mode line = case (line.content, line.eol) of
 
 -- | The results from lexing a single token from within a line.
 -- The algorithm is explained more in 'loopLexer'.
-type LexerStep = (Raw.Token Pos, Either [Raw.Token Pos] (Pos, Text), LexMode)
+type LexerStep = (Token Pos, Either [Token Pos] (Pos, Text), LexMode)
 
 -- | The lexer algorithm is a loop.
 -- We lex a single token with one of 'stdLex, sqLex, dqLex, tqLex'.
 -- This token comes with some state data.
 -- We emit the token (wrapped into a proper 'Token Span').
 -- Then, we inspect the state data to determine the next iteration of the loop (or its termination).
-loopLexer :: Line -> LexerStep -> Linear (Raw.Token Span) LexMode
+loopLexer :: Line -> LexerStep -> Linear (Token Span) LexMode
 loopLexer line (tok, rest, newMode) = oneToken `More` moreTokens
   where
   r = either (const line.loc.end) fst rest
@@ -608,15 +603,15 @@ loopLexer line (tok, rest, newMode) = oneToken `More` moreTokens
         , eol = line.eol
         }
 
-_extraTokens :: [Raw.Token Pos] -- extra tokens to emit
+_extraTokens :: [Token Pos] -- extra tokens to emit
   -> Line -- the rest of the line
-  -> Linear (Raw.Token Span) LexMode -- token stream after the input tokens, dependent on the Line argument
-  -> Linear (Raw.Token Span) LexMode
+  -> Linear (Token Span) LexMode -- token stream after the input tokens, dependent on the Line argument
+  -> Linear (Token Span) LexMode
 _extraTokens [] _ z = z
 _extraTokens [x] line z = tok `More` z
   where tok = x <&> \l -> unwrapOrPanic_ $ mkSpan l line.loc.end
 _extraTokens (x:xs@(next:_)) line z = tok `More` _extraTokens xs line z
-  where tok = x <&> \l -> unwrapOrPanic_ $ mkSpan l (Raw.annotation next)
+  where tok = x <&> \l -> unwrapOrPanic_ $ mkSpan l (annotation next)
 
 -------------------------
 ------ Linear Data ------

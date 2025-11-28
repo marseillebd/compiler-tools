@@ -223,10 +223,10 @@ Digits 64:1--64:2 0 1
 Whitespace 64:2--64:3 " "
 Digits 64:3--64:6 137 3
 Whitespace 64:6--64:7 " "
-SignTok 64:7--64:8 Positive
+Sign 64:7--64:8 Positive
 Digits 64:8--64:9 4 1
 Whitespace 64:9--64:10 " "
-SignTok 64:10--64:11 Negative
+Sign 64:10--64:11 Negative
 Digits 64:11--64:13 69 2
 Whitespace 64:13--64:14 " "
 Digits 64:14--64:15 0 1
@@ -237,7 +237,7 @@ Digits 64:18--64:19 1 1
 Punctuation 64:19--64:20 Dot
 Digits 64:20--64:21 0 1
 Whitespace 64:21--64:22 " "
-SignTok 64:22--64:23 Negative
+Sign 64:22--64:23 Negative
 Digits 64:23--64:24 0 1
 Punctuation 64:24--64:25 Dot
 Digits 64:25--64:26 0 1
@@ -252,10 +252,10 @@ Digits 65:5--65:6 1 1
 Punctuation 65:6--65:7 Dot
 Digits 65:7--65:8 0 1
 Power 65:8--65:9
-SignTok 65:9--65:10 Negative
+Sign 65:9--65:10 Negative
 Digits 65:10--65:13 100 3
 Whitespace 65:13--65:14 " "
-SignTok 65:14--65:15 Negative
+Sign 65:14--65:15 Negative
 Digits 65:15--65:16 0 1
 Punctuation 65:16--65:17 Dot
 Digits 65:17--65:18 0 1
@@ -280,7 +280,7 @@ Whitespace 66:19--66:20 " "
 Radix 66:20--66:22 Base16
 Digits 66:22--66:24 66 2
 Power 66:24--66:25
-SignTok 66:25--66:26 Negative
+Sign 66:25--66:26 Negative
 Digits 66:26--66:27 0 1
 Symbol 66:27--66:28 "A"
 Whitespace 66:28--66:29 " "
