@@ -1,15 +1,3 @@
--- DELME what's the plan?
---
--- The source code is stored as bytes on disk.
--- We then group these bytes into meaningful units, not discarding any bytes.
--- This module defines the "meaningful units": morphemes.
--- The next big-picture stage will translate these "morphemes" into "lexemes".
--- This morpheme->lexeme stage itself consists of several streaming passes.
---
--- 1. get rid of the junk: illegal bytes, comments, trailing whitespace
--- 2. assemble lexemes: numbers, strings
--- 3. interpret whitespace: detect indents/dedents, ensure line endings are normalized, contextualize tokens based on surrounding whitespace, eliminate remaining whitespace
-
 module Language.CCS.Lexer.Morpheme
   ( CCS(..)
   , Token(..)

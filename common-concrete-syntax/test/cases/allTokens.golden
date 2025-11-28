@@ -1,12 +1,12 @@
 Comment 1:1--1:28 "# a comment (and a newline)"
-Newline 1:28--2:1
+Eol 1:28--2:1 LF
 Whitespace 2:1--2:4 "   "
 Comment 2:4--2:23 "# linear whitespace"
-Newline 2:23--3:1
+Eol 2:23--3:1 LF
 Whitespace 3:1--3:4 "\t  "
 Comment 3:4--3:15 "# mixed lws"
-Newline 3:15--4:1
-Newline 4:1--5:1
+Eol 3:15--4:1 LF
+Eol 4:1--5:1 LF
 Punctuation 5:1--5:2 Comma
 Punctuation 5:2--5:3 Dot
 Punctuation 5:3--5:4 Colon
@@ -14,7 +14,7 @@ Punctuation 5:4--5:5 Semicolon
 Punctuation 5:5--5:6 Backslash
 Whitespace 5:6--5:7 " "
 Comment 5:7--5:35 "# all the simple punctuation"
-Newline 5:35--6:1
+Eol 5:35--6:1 LF
 Punctuation 6:1--6:2 (Open Round)
 Punctuation 6:2--6:3 (Close Round)
 Punctuation 6:3--6:4 (Open Square)
@@ -23,28 +23,28 @@ Punctuation 6:5--6:6 (Open Curly)
 Punctuation 6:6--6:7 (Close Curly)
 Whitespace 6:7--6:8 " "
 Comment 6:8--6:39 "# all the enclosing punctuation"
-Newline 6:39--7:1
-Newline 7:1--8:1
+Eol 6:39--7:1 LF
+Eol 7:1--8:1 LF
 Symbol 8:1--8:2 "a"
 Whitespace 8:2--8:3 " "
 Comment 8:3--8:29 "# single letter identifier"
-Newline 8:29--9:1
+Eol 8:29--9:1 LF
 Symbol 9:1--9:6 "hello"
 Whitespace 9:6--9:7 " "
 Comment 9:7--9:26 "# longer identifier"
-Newline 9:26--10:1
+Eol 9:26--10:1 LF
 Symbol 10:1--10:4 "<$>"
 Whitespace 10:4--10:5 " "
 Comment 10:5--10:34 "# operator-looking identifier"
-Newline 10:34--11:1
+Eol 10:34--11:1 LF
 Symbol 11:1--11:4 "lt?"
 Whitespace 11:4--11:5 " "
 Comment 11:5--11:23 "# mixed identifier"
-Newline 11:23--12:1
+Eol 11:23--12:1 LF
 Symbol 12:1--12:20 "a0!$%&*+-/<=>?@^_|~"
 Whitespace 12:20--12:21 " "
 Comment 12:21--12:60 "# an identifier with all the characters"
-Newline 12:60--13:1
+Eol 12:60--13:1 LF
 Symbol 13:1--13:2 "+"
 Whitespace 13:2--13:3 " "
 Symbol 13:3--13:5 "++"
@@ -54,8 +54,8 @@ Whitespace 13:7--13:8 " "
 Symbol 13:8--13:10 "->"
 Whitespace 13:10--13:11 " "
 Comment 13:11--13:55 "# identifiers that start with plus and minus"
-Newline 13:55--14:1
-Newline 14:1--15:1
+Eol 13:55--14:1 LF
+Eol 14:1--15:1 LF
 Quote 15:1--15:2 DblQuote
 Quote 15:2--15:3 DblQuote
 Whitespace 15:3--15:4 " "
@@ -69,13 +69,13 @@ Quote 15:10--15:11 DblQuote
 Quote 15:11--15:12 Backtick
 Whitespace 15:12--15:13 " "
 Comment 15:13--15:28 "# empty strings"
-Newline 15:28--16:1
+Eol 15:28--16:1 LF
 Quote 16:1--16:2 DblQuote
 StdStr 16:2--16:13 "hello world"
 Quote 16:13--16:14 DblQuote
 Whitespace 16:14--16:15 " "
 Comment 16:15--16:29 "# basic string"
-Newline 16:29--17:1
+Eol 16:29--17:1 LF
 Quote 17:1--17:2 DblQuote
 StdStr 17:2--17:8 "hello "
 Quote 17:8--17:9 Backtick
@@ -84,10 +84,10 @@ Quote 17:13--17:14 Backtick
 Quote 17:14--17:15 DblQuote
 Whitespace 17:15--17:16 " "
 Comment 17:16--17:33 "# template string"
-Newline 17:33--18:1
+Eol 17:33--18:1 LF
 Quote 18:1--18:2 DblQuote
 StdStr 18:2--18:24 " # unterminated string"
-Newline 18:24--19:1
+Eol 18:24--19:1 LF
 Quote 19:1--19:2 DblQuote
 StrEscape 19:2--19:4 "\NUL"
 StrEscape 19:4--19:6 "\a"
@@ -106,7 +106,7 @@ StrEscape 19:28--19:30 ""
 Quote 19:30--19:31 DblQuote
 Whitespace 19:31--19:32 " "
 Comment 19:32--19:47 "# basic escapes"
-Newline 19:47--20:1
+Eol 19:47--20:1 LF
 Quote 20:1--20:2 DblQuote
 StrEscape 20:2--20:6 "\SUB"
 StdStr 20:6--20:8 "aa"
@@ -116,25 +116,25 @@ StdStr 20:16--20:20 "beef"
 Quote 20:20--20:21 DblQuote
 Whitespace 20:21--20:22 " "
 Comment 20:22--20:41 "# codepoint escapes"
-Newline 20:41--21:1
-Newline 21:1--22:1
+Eol 20:41--21:1 LF
+Eol 21:1--22:1 LF
 Quote 22:1--22:2 SqlQuote
 Quote 22:2--22:3 SqlQuote
 Whitespace 22:3--22:4 " "
 Comment 22:4--22:19 "# empty sql str"
-Newline 22:19--23:1
+Eol 22:19--23:1 LF
 Quote 23:1--23:2 SqlQuote
 StdStr 23:2--23:13 "\\\\\\([a-z]\\)"
 Quote 23:13--23:14 SqlQuote
 Whitespace 23:14--23:15 " "
 Comment 23:15--23:30 "# basic sql str"
-Newline 23:30--24:1
+Eol 23:30--24:1 LF
 Quote 24:1--24:2 SqlQuote
 StrEscape 24:2--24:4 "'"
 Quote 24:4--24:5 SqlQuote
 Whitespace 24:5--24:6 " "
 Comment 24:6--24:42 "# sql string with only an apostrophe"
-Newline 24:42--25:1
+Eol 24:42--25:1 LF
 Quote 25:1--25:2 SqlQuote
 StdStr 25:2--25:8 "Wouldn"
 StrEscape 25:8--25:10 "'"
@@ -144,81 +144,81 @@ StdStr 25:13--25:15 "ve"
 Quote 25:15--25:16 SqlQuote
 Whitespace 25:16--25:17 " "
 Comment 25:17--25:41 "# sql double contraction"
-Newline 25:41--26:1
-Newline 26:1--27:1
+Eol 25:41--26:1 LF
+Eol 26:1--27:1 LF
 Comment 27:1--27:27 "### multi-line strings ###"
-Newline 27:27--28:1
-Newline 28:1--29:1
+Eol 27:27--28:1 LF
+Eol 28:1--29:1 LF
 Comment 29:1--29:8 "# empty"
-Newline 29:8--30:1
+Eol 29:8--30:1 LF
 Quote 30:1--30:4 (MlQuote "\"\"\"")
-Newline 30:4--31:1
+Eol 30:4--31:1 LF
 Quote 31:1--31:4 (MlQuote "\"\"\"")
-Newline 31:4--32:1
+Eol 31:4--32:1 LF
 Comment 32:1--32:25 "# empty with odd indents"
-Newline 32:25--33:1
+Eol 32:25--33:1 LF
 Whitespace 33:1--33:3 "  "
 Quote 33:3--33:6 (MlQuote "\"\"\"")
-Newline 33:6--34:1
+Eol 33:6--34:1 LF
 Whitespace 34:1--34:2 " "
 Quote 34:2--34:5 (MlQuote "\"\"\"")
-Newline 34:5--35:1
+Eol 34:5--35:1 LF
 Comment 35:1--35:18 "# with blank line"
-Newline 35:18--36:1
+Eol 35:18--36:1 LF
 Quote 36:1--36:4 (MlQuote "\"\"\"")
-Newline 36:4--37:1
+Eol 36:4--37:1 LF
 Whitespace 37:1--37:5 "   \t"
-Newline 37:5--38:1
+Eol 37:5--38:1 LF
 Quote 38:1--38:4 (MlQuote "\"\"\"")
-Newline 38:4--39:1
-Newline 39:1--40:1
+Eol 38:4--39:1 LF
+Eol 39:1--40:1 LF
 Comment 40:1--40:11 "# with sql"
-Newline 40:11--41:1
+Eol 40:11--41:1 LF
 Quote 41:1--41:4 (MlQuote "\"\"\"")
-Newline 41:4--42:1
+Eol 41:4--42:1 LF
 StdStr 42:1--42:9 "SELECT *"
-Newline 42:9--43:1
+Eol 42:9--43:1 LF
 StdStr 43:1--43:16 "FROM some_table"
-Newline 43:16--44:1
+Eol 43:16--44:1 LF
 Whitespace 44:1--44:3 "  "
 StdStr 44:3--44:19 "JOIN other_table"
-Newline 44:19--45:1
+Eol 44:19--45:1 LF
 StdStr 45:1--45:24 "WHERE some_col <= 65536"
-Newline 45:24--46:1
+Eol 45:24--46:1 LF
 Quote 46:1--46:4 (MlQuote "\"\"\"")
-Newline 46:4--47:1
-Newline 47:1--48:1
+Eol 46:4--47:1 LF
+Eol 47:1--48:1 LF
 Comment 48:1--48:14 "# long quotes"
-Newline 48:14--49:1
+Eol 48:14--49:1 LF
 Quote 49:1--49:6 (MlQuote "\"\"\"\"\"")
-Newline 49:6--50:1
+Eol 49:6--50:1 LF
 StdStr 50:1--50:17 "# some more code"
-Newline 50:17--51:1
+Eol 50:17--51:1 LF
 StdStr 51:1--51:4 "\"\"\""
-Newline 51:4--52:1
+Eol 51:4--52:1 LF
 StdStr 52:1--52:29 "including a nested ml string"
-Newline 52:29--53:1
+Eol 52:29--53:1 LF
 StdStr 53:1--53:4 "\"\"\""
-Newline 53:4--54:1
+Eol 53:4--54:1 LF
 Quote 54:1--54:6 (MlQuote "\"\"\"\"\"")
-Newline 54:6--55:1
-Newline 55:1--56:1
+Eol 54:6--55:1 LF
+Eol 55:1--56:1 LF
 Comment 56:1--56:15 "# named quotes"
-Newline 56:15--57:1
+Eol 56:15--57:1 LF
 Quote 57:1--57:7 (MlQuote "\"\"\"END")
-Newline 57:7--58:1
+Eol 57:7--58:1 LF
 StdStr 58:1--58:17 "# some more code"
-Newline 58:17--59:1
+Eol 58:17--59:1 LF
 StdStr 59:1--59:4 "\"\"\""
-Newline 59:4--60:1
+Eol 59:4--60:1 LF
 StdStr 60:1--60:29 "including a nested ml string"
-Newline 60:29--61:1
+Eol 60:29--61:1 LF
 StdStr 61:1--61:4 "\"\"\""
-Newline 61:4--62:1
+Eol 61:4--62:1 LF
 Whitespace 62:1--62:3 "  "
 Quote 62:3--62:9 (MlQuote "\"\"\"END")
-Newline 62:9--63:1
-Newline 63:1--64:1
+Eol 62:9--63:1 LF
+Eol 63:1--64:1 LF
 Digits 64:1--64:2 0 1
 Whitespace 64:2--64:3 " "
 Digits 64:3--64:6 137 3
@@ -243,7 +243,7 @@ Punctuation 64:24--64:25 Dot
 Digits 64:25--64:26 0 1
 Whitespace 64:26--64:27 " "
 Comment 64:27--64:44 "# decimal numbers"
-Newline 64:44--65:1
+Eol 64:44--65:1 LF
 Digits 65:1--65:2 1 1
 Power 65:2--65:3
 Digits 65:3--65:4 4 1
@@ -267,7 +267,7 @@ Power 65:23--65:24
 Digits 65:24--65:25 7 1
 Whitespace 65:25--65:26 " "
 Comment 65:26--65:37 "# exponents"
-Newline 65:37--66:1
+Eol 65:37--66:1 LF
 Radix 66:1--66:3 Base2
 Digits 66:3--66:7 11 4
 Whitespace 66:7--66:8 " "
@@ -285,7 +285,7 @@ Digits 66:26--66:27 0 1
 Symbol 66:27--66:28 "A"
 Whitespace 66:28--66:29 " "
 Comment 66:29--66:42 "# other bases"
-Newline 66:42--67:1
+Eol 66:42--67:1 LF
 Digits 67:1--67:10 1000000 7
 Whitespace 67:10--67:11 " "
 Radix 67:11--67:13 Base2
@@ -298,4 +298,4 @@ Radix 67:33--67:35 Base16
 Digits 67:35--67:44 3735928559 8
 Whitespace 67:44--67:45 " "
 Comment 67:45--67:63 "# digit separators"
-Newline 67:63--68:1
+Eol 67:63--68:1 LF

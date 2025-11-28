@@ -1,5 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
-
+-- FIXME rename to NoiseReduction
 module Language.CCS.Lexer.Morpheme.LineEndings
   ( CCS(..)
   , Token(..)
@@ -11,8 +10,8 @@ module Language.CCS.Lexer.Morpheme.LineEndings
 import Control.Monad (when)
 import Data.Function ((&))
 import Data.Text (Text)
-import Language.CCS.Error (unimplemented, internalError)
-import Language.Location (Span, Pos)
+import Language.CCS.Error (internalError)
+import Language.Location (Span)
 import Language.Nanopass (deflang, defpass)
 import Streaming (Stream, Of(..))
 import Streaming.Prelude (yield)
@@ -62,7 +61,7 @@ pipeline ::
   ( Monad m
   , DeleteComment m
   , RaiseIllegalBytes m
-  , RaiseNewlineError m )
+  , WhitespaceError m )
   => Stream (Of (L0.Token Span)) m r
   -> Stream (Of (Token Span)) m r
 pipeline input
@@ -93,18 +92,22 @@ simpleDeletions inp0 = S.effect $ S.next inp0 >>= \case
     _ -> pure $ yield (xlate x) >> simpleDeletions inp1
 
 untrailing ::
-  ( Monad m )
+  ( Monad m
+  , WhitespaceError m )
   => Stream (Of (Token Span)) m r
   -> Stream (Of (Token Span)) m r
 untrailing inp0 = S.effect $ S.next inp0 >>= \case
   Left r -> pure $ pure r
-  Right (lws@(Whitespace _ _), inp1) -> S.next inp1 >>= \case
+  Right (lws@(Whitespace l _), inp1) -> S.next inp1 >>= \case
 -- remove whitespace before end of file
-    Left r -> pure $ pure r
+    Left r -> do
+      raiseTrailingWhitespace l
+      pure $ pure r
 -- remove whitespace before end of line
-    Right (nl@(Newline _), rest) ->
+    Right (nl@(Newline _), rest) -> do
+      raiseTrailingWhitespace l
       pure $ yield nl >> untrailing rest
--- leave whitespace alone
+-- leave non-trailing whitespace alone
     Right (other, inp2) -> do
       let rest = yield other >> inp2
       pure $ yield lws >> untrailing rest
@@ -114,7 +117,7 @@ untrailing inp0 = S.effect $ S.next inp0 >>= \case
 
 consistentNewlines ::
   ( Monad m
-  , RaiseNewlineError m )
+  , WhitespaceError m )
   => Maybe (Span, EolType)
   -> Stream (Of (L0.Token Span)) m r
   -> Stream (Of (L0.Token Span)) m r
@@ -139,7 +142,7 @@ consistentNewlines (Just (l, ty)) = loop
 
 endsInNewline ::
   ( Monad m
-  , RaiseNewlineError m )
+  , WhitespaceError m )
   => Stream (Of (L0.Token Span)) m r
   -> Stream (Of (L0.Token Span)) m r
 endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
@@ -181,6 +184,7 @@ data InconsistentNewlines = InconsistentNewlines
   { expected :: (Span, EolType)
   , found :: (Span, EolType)
   }
-class RaiseNewlineError m where
+class WhitespaceError m where
+  raiseTrailingWhitespace :: Span -> m ()
   raiseInconsistenNewlines :: InconsistentNewlines -> m ()
   raiseNoNlAtEof :: Span -> m ()
