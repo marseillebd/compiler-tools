@@ -1,7 +1,7 @@
--- FIXME rename to NoiseReduction
-module Language.CCS.Lexer.Morpheme.LineEndings
+module Language.CCS.Lexer.Morpheme.NoiseReduction
   ( CCS(..)
   , Token(..)
+  , annotation
   , pipeline
   , DeleteComment(..)
   , RaiseIllegalBytes(..)
@@ -31,6 +31,19 @@ import qualified Streaming.Prelude as S
   )
 )
 |]
+
+annotation :: Token a -> a
+annotation (Symbol a _) = a
+annotation (Sign a _) = a
+annotation (Radix a _) = a
+annotation (Digits a _ _) = a
+annotation (Power a) = a
+annotation (Punctuation a _) = a
+annotation (Quote a _) = a
+annotation (StdStr a _) = a
+annotation (StrEscape a _) = a
+annotation (Newline a) = a
+annotation (Whitespace a _) = a
 
 -- FIXME this isn't working, and I think it's a problem in the nanopass implementation
 -- $(pure [])

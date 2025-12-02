@@ -11,6 +11,7 @@ module Language.CCS.Lexer.Morpheme
   ) where
 
 import Data.Text (Text)
+import GHC.Records (HasField(..))
 import Language.Nanopass (deflang)
 
 [deflang|
@@ -68,6 +69,13 @@ data Sign = Positive | Negative
 
 data Radix = Base2 | Base8 | Base10 | Base16
   deriving (Eq, Show)
+
+instance HasField "base" Radix Integer where
+  getField = \case
+    Base2 -> 2
+    Base8 -> 8
+    Base10 -> 10
+    Base16 -> 16
 
 data QuoteType
   = SqlQuote
