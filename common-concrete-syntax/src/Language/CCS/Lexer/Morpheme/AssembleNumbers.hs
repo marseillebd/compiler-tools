@@ -63,18 +63,18 @@ data FloLit
     }
   deriving (Eq, Show)
 
+$(pure [])
+
+[defpass|(from L0:CCS to CCS)|]
+
 xlate :: L0.Token loc -> Token loc
-xlate (L0.Symbol l x) = Symbol l x
-xlate (L0.Sign _ _) = internalError "attempt to translate Sign token to next lexing stage"
-xlate (L0.Radix _ _) = internalError "attempt to translate Radix token to next lexing stage"
-xlate (L0.Digits _ _ _) = internalError "attempt to translate Digits token to next lexing stage"
-xlate (L0.Power _) = internalError "attempt to translate Power token to next lexing stage"
-xlate (L0.Punctuation l x) = Punctuation l x
-xlate (L0.Quote l x) = Quote l x
-xlate (L0.StdStr l x) = StdStr l x
-xlate (L0.StrEscape l x) = StrEscape l x
-xlate (L0.Newline l) = Newline l
-xlate (L0.Whitespace l x) = Whitespace l x
+xlate = descendTokenI XlateI
+  { onTokenI = const Nothing
+  , onTokenSignI = \_ _ -> internalError "attempt to translate Sign token to next lexing stage"
+  , onTokenRadixI = \_ _ -> internalError "attempt to translate Radix token to next lexing stage"
+  , onTokenDigitsI = \_ _ _ -> internalError "attempt to translate Digits token to next lexing stage"
+  , onTokenPowerI = \_ -> internalError "attempt to translate Power token to next lexing stage"
+  }
 
 assemble ::
   ( Monad m

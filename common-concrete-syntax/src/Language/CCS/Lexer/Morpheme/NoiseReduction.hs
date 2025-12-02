@@ -46,25 +46,16 @@ annotation (StrEscape a _) = a
 annotation (Newline a) = a
 annotation (Whitespace a _) = a
 
--- FIXME this isn't working, and I think it's a problem in the nanopass implementation
--- $(pure [])
--- [defpass|(from L0:CCS to CCS)|]
--- So, I'm writing a pass manually for now, because this one is so simple
+$(pure [])
+[defpass|(from L0:CCS to CCS)|]
 
 xlate :: L0.Token loc -> Token loc
-xlate (L0.Symbol l x) = Symbol l x
-xlate (L0.Sign l x) = Sign l x
-xlate (L0.Radix l x) = Radix l x
-xlate (L0.Digits l x y) = Digits l x y
-xlate (L0.Power l) = Power l
-xlate (L0.Punctuation l x) = Punctuation l x
-xlate (L0.Quote l x) = Quote l x
-xlate (L0.StdStr l x) = StdStr l x
-xlate (L0.StrEscape l x) = StrEscape l x
-xlate (L0.Eol l _) = Newline l
-xlate (L0.Whitespace l x) = Whitespace l x
-xlate (L0.Comment _ _) = internalError "attempt to translate Comment token to next lexing stage"
-xlate (L0.Illegal _ _) = internalError "attempt to translate Illegal token to next lexing stage"
+xlate = descendTokenI XlateI
+  { onTokenI = const Nothing
+  , onTokenCommentI = \_ _ -> internalError "attempt to translate Comment token to next lexing stage"
+  , onTokenEolI = \l _ -> Newline l
+  , onTokenIllegalI = \_ _ -> internalError "attempt to translate Illegal token to next lexing stage"
+  }
 
 -- | Gets rid of comments, then trailing whitespace.
 -- Raises an error on illegal tokens.
