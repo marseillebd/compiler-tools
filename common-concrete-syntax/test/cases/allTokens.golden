@@ -299,3 +299,10 @@ Digits 67:35--67:44 3735928559 8
 Whitespace 67:44--67:45 " "
 Comment 67:45--67:63 "# digit separators"
 Eol 67:63--68:1 LF
+Eol 68:1--69:1 LF
+Sign 69:1--69:2 Negative
+Radix 69:2--69:4 Base16
+Digits 69:4--69:5 1 1
+Punctuation 69:5--69:6 Dot
+Digits 69:6--69:9 225 3
+Eol 69:9--70:1 LF

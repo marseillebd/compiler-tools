@@ -5,6 +5,7 @@ module Language.CCS.Lexer.Morpheme.AssembleNumbers
   , IntLit(..)
   , FloLit(..)
   , assemble
+  , MalformedNumber(..)
   ) where
 
 import Prelude hiding (exp)

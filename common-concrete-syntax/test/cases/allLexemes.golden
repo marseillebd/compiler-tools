@@ -1,0 +1,28 @@
+Newline 1:14--2:1
+Newline 2:1--3:1
+IntegerLiteral 3:1--3:2 (IntLit {signI = Positive, magI = 1})
+Newline 3:2--4:1
+IntegerLiteral 4:1--4:3 (IntLit {signI = Negative, magI = 4})
+Whitespace 4:3--4:4 " "
+IntegerLiteral 4:4--4:6 (IntLit {signI = Positive, magI = 3})
+Newline 4:6--5:1
+FloatingLiteral 5:1--5:5 (FloLit {signF = Positive, magF = 102, expF = (Base10,-2)})
+Newline 5:5--6:1
+IntegerLiteral 6:1--6:6 (IntLit {signI = Positive, magI = 256})
+Newline 6:6--7:1
+FloatingLiteral 7:1--7:6 (FloLit {signF = Positive, magF = 10, expF = (Base16,-1)})
+Newline 7:6--8:1
+FloatingLiteral 8:1--8:7 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
+Newline 8:7--9:1
+FloatingLiteral 9:1--9:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
+Newline 9:8--10:1
+FloatingLiteral 10:1--10:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,-8)})
+Newline 10:8--11:1
+FloatingLiteral 11:1--11:10 (FloLit {signF = Negative, magF = 16, expF = (Base16,-1)})
+Newline 11:10--12:1
+Newline 12:1--13:1
+FloatingLiteral 13:1--13:9 (FloLit {signF = Negative, magF = 4321, expF = (Base16,-3)})
+Newline 13:9--14:1
+FloatingLiteral 14:1--14:7 (FloLit {signF = Negative, magF = 2, expF = (Base2,-1)})
+Symbol 14:7--14:9 "e1"
+Newline 14:9--15:1

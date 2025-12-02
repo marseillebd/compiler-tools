@@ -5,6 +5,7 @@ module Language.CCS.Lexer.Morpheme.NoiseReduction
   , pipeline
   , DeleteComment(..)
   , RaiseIllegalBytes(..)
+  , WhitespaceError(..)
   ) where
 
 import Control.Monad (when)
@@ -146,7 +147,7 @@ consistentNewlines (Just (l, ty)) = loop
   loop inp0 = S.effect $ S.next inp0 >>= \case
     Left r -> pure $ pure r
     Right (nl@(L0.Eol l' ty'), rest) -> do
-      when (ty /= ty') $ raiseInconsistenNewlines InconsistentNewlines
+      when (ty /= ty') $ raiseInconsistentNewlines InconsistentNewlines
         { expected = (l, ty)
         , found = (l', ty')
         }
@@ -197,7 +198,8 @@ data InconsistentNewlines = InconsistentNewlines
   { expected :: (Span, EolType)
   , found :: (Span, EolType)
   }
+  deriving (Show)
 class WhitespaceError m where
   raiseTrailingWhitespace :: Span -> m ()
-  raiseInconsistenNewlines :: InconsistentNewlines -> m ()
+  raiseInconsistentNewlines :: InconsistentNewlines -> m ()
   raiseNoNlAtEof :: Span -> m ()
