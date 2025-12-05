@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Data.Function ((&))
 import Data.Text (Text)
 import Language.CCS.Error (internalError)
-import Language.Location (Span)
+import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Streaming (Stream, Of(..))
 import Streaming.Prelude (yield)
@@ -28,7 +28,7 @@ import qualified Streaming.Prelude as S
     (- Comment)
     (- Illegal)
     (- Eol)
-    (+ Newline loc)
+    (+ Indentation loc Text)
   )
 )
 |]
@@ -43,7 +43,7 @@ annotation (Punctuation a _) = a
 annotation (Quote a _) = a
 annotation (StdStr a _) = a
 annotation (StrEscape a _) = a
-annotation (Newline a) = a
+annotation (Indentation a _) = a
 annotation (Whitespace a _) = a
 
 $(pure [])
@@ -53,7 +53,7 @@ xlate :: L0.Token loc -> Token loc
 xlate = descendTokenI XlateI
   { onTokenI = const Nothing
   , onTokenCommentI = \_ _ -> internalError "attempt to translate Comment token to next lexing stage"
-  , onTokenEolI = \l _ -> Newline l
+  , onTokenEolI = \_ _ -> internalError "attempt to translate Eol token to next lexing stage"
   , onTokenIllegalI = \_ _ -> internalError "attempt to translate Illegal token to next lexing stage"
   }
 
@@ -82,19 +82,43 @@ simpleDeletions ::
   , RaiseIllegalBytes m )
   => Stream (Of (L0.Token Span)) m r
   -> Stream (Of (Token Span)) m r
-simpleDeletions inp0 = S.effect $ S.next inp0 >>= \case
-  Left r -> pure $ pure r
-  Right (x, inp1) -> case x of
--- raise error and delete illegal tokens
-    L0.Illegal l txt -> do
+simpleDeletions = startLine
+  where
+  startLine inp0 = S.effect $ S.next inp0 >>= \case
+  -- whitespace at start of line becomes indentation
+    Right (L0.Whitespace l txt, rest) -> pure $ do
+      yield (Indentation l txt)
+      loop rest
+  -- otherwise, we create empty indentation
+    Right (other, inp1) -> pure $ do
+      let l = spanFromPos (L0.annotation other).start
+          rest = yield other >> inp1
+      yield (Indentation l "")
+      loop rest
+    Left r -> pure $ pure r
+  loop inp0 = S.effect $ S.next inp0 >>= \case
+  -- raise error and delete illegal tokens
+    Right (L0.Illegal l txt, inp1) -> do
       raiseIllegalBytesOrChars l txt
-      pure $ simpleDeletions inp1
--- delete comment tokens
-    L0.Comment l txt -> do
+      pure $ loop inp1
+  -- delete comment tokens
+    Right (L0.Comment l txt, inp1) -> do
       deleteComment l txt
-      pure $ simpleDeletions inp1
--- non-comment/illegal tokens are unchanged
-    _ -> pure $ yield (xlate x) >> simpleDeletions inp1
+      pure $ loop inp1
+  -- eol usually goes back to `startLine` processing
+    Right (L0.Eol l _, inp1) -> S.next inp1 >>= \case
+      Right (other, inp2) -> pure $ do
+        let rest = yield other >> inp2
+        startLine rest
+  -- but if we're at the end of the file, we want to generate a final indentation
+      Left r -> pure $ do
+        yield (Indentation (spanFromPos l.end) "")
+        pure r
+  -- base cases
+    Right (other, rest) -> pure $ do
+      yield (xlate other)
+      loop rest
+    Left r -> pure $ pure r
 
 untrailing ::
   ( Monad m
@@ -109,7 +133,7 @@ untrailing inp0 = S.effect $ S.next inp0 >>= \case
       raiseTrailingWhitespace l
       pure $ pure r
 -- remove whitespace before end of line
-    Right (nl@(Newline _), rest) -> do
+    Right (nl@(Indentation _ _), rest) -> do
       raiseTrailingWhitespace l
       pure $ yield nl >> untrailing rest
 -- leave non-trailing whitespace alone

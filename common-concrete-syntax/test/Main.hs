@@ -1,19 +1,21 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main (main) where
 
 import Data.Function ((&))
+import Data.IORef(IORef, newIORef, readIORef, modifyIORef)
 import Data.Text (Text)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import Language.CCS.Lexer.Morpheme.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Morpheme.AssembleNumbers (MalformedNumber(..))
+import Language.CCS.Lexer.Morpheme.Assemble.Numbers (MalformedNumber(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Language.CCS.Lexer.Morpheme.AssembleNumbers as LexAN
+import qualified Language.CCS.Lexer.Morpheme.Assemble.Numbers as LexAN
 import qualified Language.CCS.Lexer.Morpheme.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
 import qualified Streaming.Prelude as S
@@ -30,14 +32,17 @@ main = defaultMain $ testGroup "Tests"
     ]
   , testGroup "Tokenizer (lexemes)"
     [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
-      output <- input
+      (err, out) <- input
             & Morpheme.pipeline
             & S.each
             & LexNR.pipeline
             & LexAN.assemble
             & S.toList
-            & runErr
-      pure $ T.unlines $ T.pack . show <$> S.fst' output
+            & execErr
+      pure $ T.concat
+        [ err
+        , T.unlines $ T.pack . show <$> S.fst' out
+        ]
     ]
   ]
 
@@ -56,35 +61,54 @@ golden name file f = goldenVsFile name gfile ofile go
   ofile = "test" </> "cases" </> file <.> "output"
   gfile = "test" </> "cases" </> file <.> "golden"
 
-newtype Err a = Err { runErr :: IO a }
-  deriving (Functor, Applicative, Monad)
+newtype Err a = Err { runErr :: IORef Text -> IO a }
+execErr :: Err a -> IO (Text, a)
+execErr action = do
+  ref <- newIORef ""
+  out <- runErr action ref
+  err <- readIORef ref
+  pure (err, out)
+instance Functor Err where
+  fmap f getX = Err $ \env -> f <$> runErr getX env
+instance Applicative Err where
+  pure x = Err $ \_ -> pure x
+  getF <*> getX = Err $ \env -> do
+    f <- runErr getF env
+    x <- runErr getX env
+    pure $ f x
+instance Monad Err where
+  getX >>= k = Err $ \env -> do
+    x <- runErr getX env
+    runErr (k x) env
+addErr :: String -> Err ()
+addErr msg = Err $ \env -> modifyIORef env $ (<> (T.pack msg <> "\n"))
 instance DeleteComment Err where
   deleteComment _ _ = pure ()
 instance RaiseIllegalBytes Err where
-  raiseIllegalBytesOrChars l txt = Err $ putStrLn $ concat
+  raiseIllegalBytesOrChars l txt = addErr $ concat
     [ "IllegalBytesOrChars: "
     , show l, " "
     , show txt
     ]
 instance WhitespaceError Err where
-  raiseTrailingWhitespace l = Err $ putStrLn $ concat
+  raiseTrailingWhitespace l = addErr $ concat
     [ "TrailingWhitespace: ", show l
     ]
-  raiseInconsistentNewlines err = Err $ putStrLn $ concat
+  raiseInconsistentNewlines err = addErr $ concat
     [ "InconosistentNewlines: "
     , show err
     ]
-  raiseNoNlAtEof l = Err $ putStrLn $ concat
+  raiseNoNlAtEof l = addErr $ concat
     [ "NoNlAtEof: ", show l ]
 instance MalformedNumber Err where
-  raiseExpectingIntegerDigits l = Err $ putStrLn $ concat
+  raiseExpectingIntegerDigits l = addErr $ concat
     [ "ExpectingIntegerDigits: ", show l
     ]
-  raiseNegativeExponentForInteger l = Err $ putStrLn $ concat
+  raiseNegativeExponentForInteger l = addErr $ concat
     [ "NegativeExponentForInteger: ", show l ]
-  raiseExpectingExponent l = Err $ putStrLn $ concat
+  raiseExpectingExponent l = addErr $ concat
     [ "ExpectingExponent: ", show l ]
-  raiseUnexpectedSign l = Err $ putStrLn $ concat
+  raiseUnexpectedSign l = addErr $ concat
     [ "UnexpectedSign: ", show l ]
-  raiseUnexpectedPower l = Err $ putStrLn $ concat
+  raiseUnexpectedPower l = addErr $ concat
     [ "UnexpectedPower: ", show l ]

@@ -1,4 +1,4 @@
-module Language.CCS.Lexer.Morpheme.AssembleNumbers
+module Language.CCS.Lexer.Morpheme.Assemble.Numbers
   ( CCS(..)
   , Token(..)
   , annotation
@@ -44,8 +44,8 @@ annotation (Punctuation a _) = a
 annotation (Quote a _) = a
 annotation (StdStr a _) = a
 annotation (StrEscape a _) = a
-annotation (Newline a) = a
 annotation (Whitespace a _) = a
+annotation (Indentation a _) = a
 annotation (IntegerLiteral a _) = a
 annotation (FloatingLiteral a _) = a
 

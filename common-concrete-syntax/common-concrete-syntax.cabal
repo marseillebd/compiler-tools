@@ -27,7 +27,8 @@ library
       Language.CCS.Lexer.Line
       Language.CCS.Lexer.Morpheme
       Language.CCS.Lexer.Morpheme.NoiseReduction
-      Language.CCS.Lexer.Morpheme.AssembleNumbers
+      Language.CCS.Lexer.Morpheme.Assemble.Numbers
+      Language.CCS.Lexer.Morpheme.Assemble.Strings
       Language.CCS.Lexer.Pipeline
       Language.CCS.Error
     -- other-modules:
