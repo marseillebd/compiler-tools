@@ -11,11 +11,13 @@ import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import Language.CCS.Lexer.Morpheme.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
 import Language.CCS.Lexer.Morpheme.Assemble.Numbers (MalformedNumber(..))
+import Language.CCS.Lexer.Morpheme.Assemble.Strings (MalformedString(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.CCS.Lexer.Morpheme.Assemble.Numbers as LexAN
+import qualified Language.CCS.Lexer.Morpheme.Assemble.Strings as LexAS
 import qualified Language.CCS.Lexer.Morpheme.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
 import qualified Streaming.Prelude as S
@@ -37,6 +39,7 @@ main = defaultMain $ testGroup "Tests"
             & S.each
             & LexNR.pipeline
             & LexAN.assemble
+            & LexAS.assemble
             & S.toList
             & execErr
       pure $ T.concat
@@ -112,3 +115,6 @@ instance MalformedNumber Err where
     [ "UnexpectedSign: ", show l ]
   raiseUnexpectedPower l = addErr $ concat
     [ "UnexpectedPower: ", show l ]
+instance MalformedString Err where
+  raiseExpectingCloseQuote l = addErr $ concat
+    [ "ExpectingCloseQuote: ", show l ]

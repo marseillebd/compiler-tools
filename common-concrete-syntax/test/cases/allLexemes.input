@@ -12,3 +12,14 @@
 
 -0x1.0e1
 -0b1.0e1
+
+'wouldn''t''ve'
+"Hello, world!"
+"Hello, `name`!"
+"`greeting`, `name`!"
+
+"""END
+asdf
+  qwerty
+
+"""END end

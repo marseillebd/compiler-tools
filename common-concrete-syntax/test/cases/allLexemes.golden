@@ -28,3 +28,23 @@ Indentation 14:1--14:1 ""
 FloatingLiteral 14:1--14:7 (FloLit {signF = Negative, magF = 2, expF = (Base2,-1)})
 Symbol 14:7--14:9 "e1"
 Indentation 15:1--15:1 ""
+Indentation 16:1--16:1 ""
+StringLiteral 16:1--16:16 (StrLit {strTy = StrLiteral, strContent = "wouldn't've"})
+Indentation 17:1--17:1 ""
+StringLiteral 17:1--17:16 (StrLit {strTy = StrLiteral, strContent = "Hello, world!"})
+Indentation 18:1--18:1 ""
+StringLiteral 18:1--18:10 (StrLit {strTy = OpenTemplate, strContent = "Hello, "})
+Symbol 18:10--18:14 "name"
+StringLiteral 18:14--18:17 (StrLit {strTy = CloseTemplate, strContent = "!"})
+Indentation 19:1--19:1 ""
+StringLiteral 19:1--19:3 (StrLit {strTy = OpenTemplate, strContent = ""})
+Symbol 19:3--19:11 "greeting"
+StringLiteral 19:11--19:15 (StrLit {strTy = MidTemplate, strContent = ", "})
+Symbol 19:15--19:19 "name"
+StringLiteral 19:19--19:22 (StrLit {strTy = CloseTemplate, strContent = "!"})
+Indentation 20:1--20:1 ""
+Indentation 21:1--21:1 ""
+MultilineLiteral 21:1--25:7 [MlLine {leadingWs = (22:1--22:1,""), lineContent = (22:1--22:5,"asdf")},MlLine {leadingWs = (23:1--23:3,"  "), lineContent = (23:3--23:9,"qwerty")},MlLine {leadingWs = (24:1--24:1,""), lineContent = (24:1--24:1,"")}]
+Whitespace 25:7--25:8 " "
+Symbol 25:8--25:11 "end"
+Indentation 26:1--26:1 ""
