@@ -1,4 +1,4 @@
-module Language.CCS.Lexer.Morpheme.Assemble.Numbers
+module Language.CCS.Lexer.Assemble.Numbers
   ( CCS(..)
   , Token(..)
   , annotation
@@ -18,7 +18,7 @@ import Streaming (Stream, Of(..))
 import Streaming.Prelude (yield)
 import Language.CCS.Lexer.Morpheme (Sign(..), Radix(..), PunctuationType(Dot))
 
-import qualified Language.CCS.Lexer.Morpheme.NoiseReduction as L0
+import qualified Language.CCS.Lexer.NoiseReduction as L0
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 

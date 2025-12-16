@@ -1,50 +1,69 @@
-TrailingWhitespace: 5:5--5:7
-Indentation 1:1--1:1 ""
-Indentation 2:1--2:1 ""
-Indentation 3:1--3:1 ""
-IntegerLiteral 3:1--3:2 (IntLit {signI = Positive, magI = 1})
-Indentation 4:1--4:1 ""
-IntegerLiteral 4:1--4:3 (IntLit {signI = Negative, magI = 4})
-Whitespace 4:3--4:4 " "
-IntegerLiteral 4:4--4:6 (IntLit {signI = Positive, magI = 3})
-Indentation 5:1--5:1 ""
-FloatingLiteral 5:1--5:5 (FloLit {signF = Positive, magF = 102, expF = (Base10,-2)})
-Indentation 6:1--6:1 ""
-IntegerLiteral 6:1--6:6 (IntLit {signI = Positive, magI = 256})
-Indentation 7:1--7:1 ""
-FloatingLiteral 7:1--7:6 (FloLit {signF = Positive, magF = 10, expF = (Base16,-1)})
-Indentation 8:1--8:1 ""
-FloatingLiteral 8:1--8:7 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
-Indentation 9:1--9:1 ""
-FloatingLiteral 9:1--9:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
-Indentation 10:1--10:1 ""
-FloatingLiteral 10:1--10:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,-8)})
-Indentation 11:1--11:1 ""
-FloatingLiteral 11:1--11:10 (FloLit {signF = Negative, magF = 16, expF = (Base16,-1)})
-Indentation 12:1--12:1 ""
-Indentation 13:1--13:1 ""
-FloatingLiteral 13:1--13:9 (FloLit {signF = Negative, magF = 4321, expF = (Base16,-3)})
-Indentation 14:1--14:1 ""
-FloatingLiteral 14:1--14:7 (FloLit {signF = Negative, magF = 2, expF = (Base2,-1)})
-Symbol 14:7--14:9 "e1"
-Indentation 15:1--15:1 ""
-Indentation 16:1--16:1 ""
-StringLiteral 16:1--16:16 (StrLit {strTy = StrLiteral, strContent = "wouldn't've"})
-Indentation 17:1--17:1 ""
-StringLiteral 17:1--17:16 (StrLit {strTy = StrLiteral, strContent = "Hello, world!"})
-Indentation 18:1--18:1 ""
-StringLiteral 18:1--18:10 (StrLit {strTy = OpenTemplate, strContent = "Hello, "})
-Symbol 18:10--18:14 "name"
-StringLiteral 18:14--18:17 (StrLit {strTy = CloseTemplate, strContent = "!"})
-Indentation 19:1--19:1 ""
-StringLiteral 19:1--19:3 (StrLit {strTy = OpenTemplate, strContent = ""})
-Symbol 19:3--19:11 "greeting"
-StringLiteral 19:11--19:15 (StrLit {strTy = MidTemplate, strContent = ", "})
-Symbol 19:15--19:19 "name"
-StringLiteral 19:19--19:22 (StrLit {strTy = CloseTemplate, strContent = "!"})
-Indentation 20:1--20:1 ""
-Indentation 21:1--21:1 ""
-MultilineLiteral 21:1--25:7 [MlLine {leadingWs = (22:1--22:1,""), lineContent = (22:1--22:5,"asdf")},MlLine {leadingWs = (23:1--23:3,"  "), lineContent = (23:3--23:9,"qwerty")},MlLine {leadingWs = (24:1--24:1,""), lineContent = (24:1--24:1,"")}]
-Whitespace 25:7--25:8 " "
-Symbol 25:8--25:11 "end"
-Indentation 26:1--26:1 ""
+UnexpectedIndent: 2:1--2:3
+UnexpectedIndent: 3:1--3:6
+TrailingWhitespace: 7:5--7:7
+BadWhitespaceBeforeMultiLineDelimiter: 38:1--38:2 expected "  "
+BadWhitespaceBeforeMultiLineDelimiter: 40:1--40:6 expected "  "
+Symbol 2:3--2:12 "badIndent"
+Symbol 3:6--3:19 "moreBadIndent"
+IntegerLiteral 5:1--5:2 (IntLit {signI = Positive, magI = 1})
+Nextline 6:1--6:1
+IntegerLiteral 6:1--6:3 (IntLit {signI = Negative, magI = 4})
+Whitespace 6:3--6:4 " "
+IntegerLiteral 6:4--6:6 (IntLit {signI = Positive, magI = 3})
+Nextline 7:1--7:1
+FloatingLiteral 7:1--7:5 (FloLit {signF = Positive, magF = 102, expF = (Base10,-2)})
+Nextline 8:1--8:1
+IntegerLiteral 8:1--8:6 (IntLit {signI = Positive, magI = 256})
+Nextline 9:1--9:1
+FloatingLiteral 9:1--9:6 (FloLit {signF = Positive, magF = 10, expF = (Base16,-1)})
+Nextline 10:1--10:1
+FloatingLiteral 10:1--10:7 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
+Nextline 11:1--11:1
+FloatingLiteral 11:1--11:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,4)})
+Nextline 12:1--12:1
+FloatingLiteral 12:1--12:8 (FloLit {signF = Positive, magF = 420, expF = (Base10,-8)})
+Nextline 13:1--13:1
+FloatingLiteral 13:1--13:10 (FloLit {signF = Negative, magF = 16, expF = (Base16,-1)})
+Nextline 15:1--15:1
+FloatingLiteral 15:1--15:9 (FloLit {signF = Negative, magF = 4321, expF = (Base16,-3)})
+Nextline 16:1--16:1
+FloatingLiteral 16:1--16:7 (FloLit {signF = Negative, magF = 2, expF = (Base2,-1)})
+Symbol 16:7--16:9 "e1"
+Nextline 18:1--18:1
+StringLiteral 18:1--18:16 (StrLit {strTy = StrLiteral, strContent = "wouldn't've"})
+Nextline 19:1--19:1
+StringLiteral 19:1--19:16 (StrLit {strTy = StrLiteral, strContent = "Hello, world!"})
+Nextline 20:1--20:1
+StringLiteral 20:1--20:10 (StrLit {strTy = OpenTemplate, strContent = "Hello, "})
+Symbol 20:10--20:14 "name"
+StringLiteral 20:14--20:17 (StrLit {strTy = CloseTemplate, strContent = "!"})
+Nextline 21:1--21:1
+StringLiteral 21:1--21:3 (StrLit {strTy = OpenTemplate, strContent = ""})
+Symbol 21:3--21:11 "greeting"
+StringLiteral 21:11--21:15 (StrLit {strTy = MidTemplate, strContent = ", "})
+Symbol 21:15--21:19 "name"
+StringLiteral 21:19--21:22 (StrLit {strTy = CloseTemplate, strContent = "!"})
+Nextline 23:1--23:1
+MultilineLiteral 23:1--27:7 [MlLine (24:1--24:5,"asdf"),MlLine (25:1--25:9,"  qwerty"),MlLine (26:1--26:1,"")]
+Whitespace 27:7--27:8 " "
+Symbol 27:8--27:11 "end"
+Symbol 29:1--29:4 "def"
+Whitespace 29:4--29:5 " "
+Symbol 29:5--29:8 "foo"
+Punctuation 29:8--29:9 (Open Round)
+Punctuation 29:9--29:10 (Close Round)
+Punctuation 29:10--29:11 Colon
+Indent 30:1--30:3
+Symbol 30:3--30:7 "pass"
+Indent 31:1--31:5
+Symbol 31:5--31:10 "print"
+Whitespace 31:10--31:11 " "
+MultilineLiteral 31:11--34:8 [MlLine (32:5--32:10,"hello"),MlLine (33:5--33:12,"  world")]
+Dedent 36:1--36:1
+Dedent 36:1--36:1
+Symbol 36:1--36:10 "something"
+Indent 37:1--37:3
+MultilineLiteral 37:3--38:14 []
+Nextline 39:1--39:3
+MultilineLiteral 39:3--40:19 []
+Dedent 41:1--41:1

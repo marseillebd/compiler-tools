@@ -24,13 +24,14 @@ common common
 library
     import:           common
     exposed-modules:
+      Language.CCS.Error
+      Language.CCS.Lexer.Assemble.Numbers
+      Language.CCS.Lexer.Assemble.Strings
       Language.CCS.Lexer.Line
       Language.CCS.Lexer.Morpheme
-      Language.CCS.Lexer.Morpheme.NoiseReduction
-      Language.CCS.Lexer.Morpheme.Assemble.Numbers
-      Language.CCS.Lexer.Morpheme.Assemble.Strings
+      Language.CCS.Lexer.NoiseReduction
       Language.CCS.Lexer.Pipeline
-      Language.CCS.Error
+      Language.CCS.Lexer.Sandhi.Indentation
     -- other-modules:
     -- other-extensions:
     build-depends:

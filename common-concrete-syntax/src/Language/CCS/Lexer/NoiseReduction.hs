@@ -1,4 +1,4 @@
-module Language.CCS.Lexer.Morpheme.NoiseReduction
+module Language.CCS.Lexer.NoiseReduction
   ( CCS(..)
   , Token(..)
   , annotation

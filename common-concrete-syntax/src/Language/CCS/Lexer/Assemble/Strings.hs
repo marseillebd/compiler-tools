@@ -1,4 +1,4 @@
-module Language.CCS.Lexer.Morpheme.Assemble.Strings
+module Language.CCS.Lexer.Assemble.Strings
   ( CCS(..)
   , Token(..)
   , StrLit(..)
@@ -18,7 +18,7 @@ import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Data.Text as T
-import qualified Language.CCS.Lexer.Morpheme.Assemble.Numbers as L0
+import qualified Language.CCS.Lexer.Assemble.Numbers as L0
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
@@ -29,7 +29,13 @@ import qualified Streaming.Prelude as S
     (- StdStr)
     (- StrEscape)
     (+ StringLiteral loc StrLit)
-    (+ MultilineLiteral loc (* MlLine))
+    (+ MultilineLiteral loc (* MlLine) (& loc Text))
+  )
+  (+ MlLine
+    (MlLine
+      (& loc Text)
+      (& loc Text)
+    )
   )
 )
 |]
@@ -47,14 +53,10 @@ data StringType
   | CloseTemplate
   deriving (Show)
 
-data MlLine = MlLine
-  { leadingWs :: (Span, Text)
-  , lineContent :: (Span, Text)
-  }
-  deriving (Show)
-
 deriving instance Show a => Show (Token a)
+deriving instance Show a => Show (MlLine a)
 deriving instance Functor Token
+deriving instance Functor MlLine
 
 annotation :: Token a -> a
 annotation (Symbol a _) = a
@@ -64,7 +66,7 @@ annotation (Indentation a _) = a
 annotation (IntegerLiteral a _) = a
 annotation (FloatingLiteral a _) = a
 annotation (StringLiteral a _) = a
-annotation (MultilineLiteral a _) = a
+annotation (MultilineLiteral a _ _) = a
 
 $(pure [])
 
@@ -176,7 +178,7 @@ mkStrType (MlQuote _) _ = internalError "mkStrType called on an MlQuote"
 
 data MlSt = MlSt
   { mlL :: Pos -- ^ position to the left of the open quotes
-  , mlLinesReverse :: [MlLine]
+  , mlLinesReverse :: [MlLine Span]
   , mlR :: Pos -- ^ position to the right of the string content so far (or the open quote)
   }
 
@@ -193,7 +195,7 @@ mlMode st inp0 = S.effect $ S.next inp0 >>= \case
       let st' = addLine (Just (lWs, ws)) (Just (l, txt))
       mlMode st' rest
     Right (L0.Quote l (MlQuote _), rest) -> pure $ do
-      yieldStr $ Just l.end
+      yieldStr $ Just (lWs, ws, l.end)
       stdMode rest
     Right (L0.Quote _ _, _) -> internalError "standard quote inside muliline literal"
     Right (other, inp2) -> pure $ do
@@ -208,7 +210,7 @@ mlMode st inp0 = S.effect $ S.next inp0 >>= \case
     let st' = addLine Nothing (Just (l, txt))
     mlMode st' rest
   Right (L0.Quote l (MlQuote _), rest) -> pure $ do
-    yieldStr $ Just l.end
+    yieldStr $ Just (spanFromPos l.start, "", l.end)
     stdMode rest
   Right (L0.Quote _ _, _) -> internalError "standard quote inside muliline literal"
   Right (L0.StrEscape _ _, _) -> internalError "string escape inside multiline literal"
@@ -234,19 +236,21 @@ mlMode st inp0 = S.effect $ S.next inp0 >>= \case
   addLine Nothing Nothing = goLine (spanFromPos st.mlR, "") (spanFromPos st.mlR, "")
   goLine :: (Span, Text) -> (Span, Text) -> MlSt
   goLine (lWs, ws) (l, txt) =
-    let line' = MlLine
-          { leadingWs = (lWs, ws)
-          , lineContent = (l, txt)
-          }
+    let line' = MlLine (lWs, ws) (l, txt)
      in st
           { mlLinesReverse = line' : st.mlLinesReverse
           , mlR = l.end
           }
 
-  yieldStr :: Monad m => Maybe Pos -> Stream (Of (Token Span)) m ()
-  yieldStr close = do
-    let spn = unwrapOrPanic_ $ mkSpan st.mlL (maybe st.mlR id close)
-    yield $ MultilineLiteral spn (reverse st.mlLinesReverse)
+  yieldStr :: Monad m => Maybe (Span, Text, Pos) -> Stream (Of (Token Span)) m ()
+  yieldStr Nothing = do
+    let spn = unwrapOrPanic_ $ mkSpan st.mlL st.mlR
+        preDelim = (spanFromPos st.mlR, "")
+    yield $ MultilineLiteral spn (reverse st.mlLinesReverse) preDelim
+  yieldStr (Just (lWs, ws, rDelim)) = do
+    let spn = unwrapOrPanic_ $ mkSpan st.mlL rDelim
+        preDelim = (lWs, ws)
+    yield $ MultilineLiteral spn (reverse st.mlLinesReverse) preDelim
 
 
 class MalformedString m where

@@ -9,17 +9,19 @@ import Data.Text (Text)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
-import Language.CCS.Lexer.Morpheme.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Morpheme.Assemble.Numbers (MalformedNumber(..))
-import Language.CCS.Lexer.Morpheme.Assemble.Strings (MalformedString(..))
+import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
+import Language.CCS.Lexer.Assemble.Numbers (MalformedNumber(..))
+import Language.CCS.Lexer.Assemble.Strings (MalformedString(..))
+import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Language.CCS.Lexer.Morpheme.Assemble.Numbers as LexAN
-import qualified Language.CCS.Lexer.Morpheme.Assemble.Strings as LexAS
-import qualified Language.CCS.Lexer.Morpheme.NoiseReduction as LexNR
+import qualified Language.CCS.Lexer.Assemble.Numbers as LexAN
+import qualified Language.CCS.Lexer.Assemble.Strings as LexAS
+import qualified Language.CCS.Lexer.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
+import qualified Language.CCS.Lexer.Sandhi.Indentation as LexSI
 import qualified Streaming.Prelude as S
 
 main :: IO ()
@@ -40,6 +42,7 @@ main = defaultMain $ testGroup "Tests"
             & LexNR.pipeline
             & LexAN.assemble
             & LexAS.assemble
+            & LexSI.process
             & S.toList
             & execErr
       pure $ T.concat
@@ -118,3 +121,12 @@ instance MalformedNumber Err where
 instance MalformedString Err where
   raiseExpectingCloseQuote l = addErr $ concat
     [ "ExpectingCloseQuote: ", show l ]
+instance MalformedIndentation Err where
+  raiseUnexpectedIndent l = addErr $ concat
+    [ "UnexpectedIndent: ", show l ]
+  raiseInsufficientIndentation l = addErr $ concat
+    [ "InsufficientIndentation: ", show l ]
+  raiseBadWhitespaceBeforeMultiLineDelimiter l expected = addErr $ concat
+    [ "BadWhitespaceBeforeMultiLineDelimiter: ", show l, " expected ", show expected ]
+  raiseLeadingWhitespace l = addErr $ concat
+    [ "LeadingWhitespace: ", show l ]

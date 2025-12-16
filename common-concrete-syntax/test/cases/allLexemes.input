@@ -1,4 +1,6 @@
 # DON'T LOOK!
+  badIndent
+     moreBadIndent
 
 1
 -4 +3
@@ -23,3 +25,16 @@ asdf
   qwerty
 
 """END end
+
+def foo():
+  pass
+    print """
+    hello
+      world
+    """
+
+something
+  """BADtoofew
+ """BADtoofew
+  """BADtoomany
+     """BADtoomany
