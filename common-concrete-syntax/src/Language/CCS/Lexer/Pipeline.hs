@@ -265,7 +265,7 @@ sqLex l (c, cs) = case classify c of
   SQuote -> case cs of
   -- escaped sequence
     c' T.:< rest | classify c' == SQuote ->
-      (StrEscape l "\'", Right (incCol $ incCol l, rest), SqLex)
+      (StrEscape l '\'', Right (incCol $ incCol l, rest), SqLex)
   -- end of string
     _ -> (Quote l SqlQuote, Right (incCol l, cs), StdLex)
   -- standard string part
@@ -287,7 +287,7 @@ sqLex l (c, cs) = case classify c of
 -- >     │         │                        │                  │
 -- >     │         │──▶ x[:hex:]{2}      ───│──▶  Escape ─────▶│
 -- >     │         │                        │
--- >     │         │──▶ u[:hex:]+        ───┘
+-- >     │         │──▶ u\{[:hex:]+\}    ───┘
 -- >     │
 -- >     │
 -- >     │                                                  ┌─────┐
@@ -303,7 +303,9 @@ dqLex l (c, cs) = case classify c of
     -- numeric escapes
     -- NOTE I've only allowed lowercase \x and \u sequences, with the idea that uppercase escape chars are reserved
       | c' == 'x' -> escapeX l c c' cs'
-      | c' == 'u' -> escapeU l c c' cs'
+      | c' == 'u'
+      , c''@'{' T.:< cs'' <- cs' ->
+        escapeU l c c' c'' cs''
     -- NOTE perhaps I'll allow control code escapes? like Haskell "\^C"
     -- NOTE ascii control code mnemonics would be nice, possibly
     -- single-letter escape sequence (mostly C escapes)
@@ -329,7 +331,7 @@ escapeX ::
 escapeX l c c' cs' = case cs' of
   (c1 T.:< c2 T.:< rest) ->
     let tok = case parseHex [c1, c2] of
-                Just n -> StrEscape l [chr $ fromInteger n]
+                Just n -> StrEscape l (chr $ fromInteger n)
                 Nothing -> Illegal l str
         str = T.pack [c, c', c1, c2]
         r = advInLine l str
@@ -344,15 +346,24 @@ escapeU ::
       Pos -- ^ left of the backslash
   -> Char -- ^ the backslash
   -> Char -- ^ the 'u'
+  -> Char -- ^ the '{'
   -> Text -- ^ the rest of the line
   -> LexerStep
-escapeU l c c' cs' =
-  let hexL = advInLine l (T.pack [c, c'])
-      (str, r, rest) = _spanBy isHexDigit (hexL, cs')
-      tok = case parseHex (T.unpack str) of
-              Just n | n <= 0x10FFFF ->
-                StrEscape l [chr $ fromIntegral n]
-              _ -> Illegal l str
+escapeU l c c' c'' cs'' =
+  let escStr = T.pack [c, c', c'']
+      hexL = advInLine l escStr
+      (numStr, rNum, cs''') = _spanBy isHexDigit (hexL, cs'')
+      code_m = case parseHex (T.unpack numStr) of
+        Just n | n <= 0x10FFFF
+               , not (0xD800 <= n && n <= 0xDFFF) -> -- surrogate pairs are not calid codepoints
+          Just $ chr $ fromIntegral n
+        _ -> Nothing
+      (str, r, rest, ok) = case cs''' of
+        c'''@'}' T.:< cs'''' -> (escStr <> numStr T.:> c''', incCol rNum, cs'''', True)
+        _ -> (escStr <> numStr, rNum, cs''', False)
+      tok = case (code_m, ok) of
+        (Just code, True) -> StrEscape l code
+        _ -> Illegal l str
     in (tok, Right (r, rest), DqLex)
 
 -- |
@@ -448,22 +459,21 @@ classify c
   | c == '~' = Id0
   | otherwise = Ill -- TODO this completely disallows all non-ascii outside strings and comments
 
-stdEscapes :: [(Char, [Char])]
+stdEscapes :: [(Char, Char)]
 stdEscapes =
-  [ ('0', "\0")
-  , ('a', "\a")
-  , ('b', "\b")
-  , ('e', "\ESC")
-  , ('f', "\f")
-  , ('n', "\n")
-  , ('r', "\r")
-  , ('t', "\t")
-  , ('v', "\v")
-  , ('\'', "\'")
-  , ('\"', "\"")
-  , ('`', "`")
-  , ('\\', "\\")
-  , ('&', "")
+  [ ('0', '\0')
+  , ('a', '\a')
+  , ('b', '\b')
+  , ('e', '\ESC')
+  , ('f', '\f')
+  , ('n', '\n')
+  , ('r', '\r')
+  , ('t', '\t')
+  , ('v', '\v')
+  , ('\'', '\'')
+  , ('\"', '\"')
+  , ('`', '`')
+  , ('\\', '\\')
   ]
 
 ------ Helpers ------

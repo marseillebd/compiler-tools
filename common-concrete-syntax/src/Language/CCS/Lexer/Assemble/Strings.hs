@@ -10,7 +10,7 @@ module Language.CCS.Lexer.Assemble.Strings
   ) where
 
 import Data.Text (Text)
-import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
+import Language.CCS.Error (internalError, unwrapOrPanic_)
 import Language.CCS.Lexer.Morpheme (QuoteType(..))
 import Language.Location (Pos, Span, spanFromPos, mkSpan)
 import Language.Nanopass (deflang, defpass)
@@ -144,9 +144,9 @@ strMode st inp0 = S.effect $ S.next inp0 >>= \case
       { strTxt = st.strTxt <> txt
       , strR = l.end
       } rest
-  Right (L0.StrEscape l txt, rest) -> pure $ do
+  Right (L0.StrEscape l c, rest) -> pure $ do
     strMode st
-      { strTxt = st.strTxt <> placeholder (T.pack txt) -- TODO multiple escapes together might encode a valid text, but this implementation may corrupt them as they add the codepoints one-by-one
+      { strTxt = st.strTxt <> T.singleton c -- TODO multiple escapes together might encode a valid text, but this implementation may corrupt them as they add the codepoints one-by-one
       , strR = l.end
       } rest
   Right (other, inp1) -> do

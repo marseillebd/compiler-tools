@@ -16,8 +16,8 @@ a0!$%&*+-/<=>?@^_|~ # an identifier with all the characters
 "hello world" # basic string
 "hello `name`" # template string
 " # unterminated string
-"\0\a\b\e\f\n\r\t\v\'\"\`\\\&" # basic escapes
-"\x1aaa\udead\&beef" # codepoint escapes
+"\0\a\b\e\f\n\r\t\v\'\"\`\\" # basic escapes
+"\x1aaa\u{dead}\u{beef}" # codepoint escapes
 
 '' # empty sql str
 '\\\([a-z]\)' # basic sql str

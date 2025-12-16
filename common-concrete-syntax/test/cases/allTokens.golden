@@ -89,34 +89,32 @@ Quote 18:1--18:2 DblQuote
 StdStr 18:2--18:24 " # unterminated string"
 Eol 18:24--19:1 LF
 Quote 19:1--19:2 DblQuote
-StrEscape 19:2--19:4 "\NUL"
-StrEscape 19:4--19:6 "\a"
-StrEscape 19:6--19:8 "\b"
-StrEscape 19:8--19:10 "\ESC"
-StrEscape 19:10--19:12 "\f"
-StrEscape 19:12--19:14 "\n"
-StrEscape 19:14--19:16 "\r"
-StrEscape 19:16--19:18 "\t"
-StrEscape 19:18--19:20 "\v"
-StrEscape 19:20--19:22 "'"
-StrEscape 19:22--19:24 "\""
-StrEscape 19:24--19:26 "`"
-StrEscape 19:26--19:28 "\\"
-StrEscape 19:28--19:30 ""
-Quote 19:30--19:31 DblQuote
-Whitespace 19:31--19:32 " "
-Comment 19:32--19:47 "# basic escapes"
-Eol 19:47--20:1 LF
+StrEscape 19:2--19:4 '\NUL'
+StrEscape 19:4--19:6 '\a'
+StrEscape 19:6--19:8 '\b'
+StrEscape 19:8--19:10 '\ESC'
+StrEscape 19:10--19:12 '\f'
+StrEscape 19:12--19:14 '\n'
+StrEscape 19:14--19:16 '\r'
+StrEscape 19:16--19:18 '\t'
+StrEscape 19:18--19:20 '\v'
+StrEscape 19:20--19:22 '\''
+StrEscape 19:22--19:24 '"'
+StrEscape 19:24--19:26 '`'
+StrEscape 19:26--19:28 '\\'
+Quote 19:28--19:29 DblQuote
+Whitespace 19:29--19:30 " "
+Comment 19:30--19:45 "# basic escapes"
+Eol 19:45--20:1 LF
 Quote 20:1--20:2 DblQuote
-StrEscape 20:2--20:6 "\SUB"
+StrEscape 20:2--20:6 '\SUB'
 StdStr 20:6--20:8 "aa"
-StrEscape 20:8--20:14 "\57005"
-StrEscape 20:14--20:16 ""
-StdStr 20:16--20:20 "beef"
-Quote 20:20--20:21 DblQuote
-Whitespace 20:21--20:22 " "
-Comment 20:22--20:41 "# codepoint escapes"
-Eol 20:41--21:1 LF
+Illegal 20:8--20:16 "\\u{dead}"
+StrEscape 20:16--20:24 '\48879'
+Quote 20:24--20:25 DblQuote
+Whitespace 20:25--20:26 " "
+Comment 20:26--20:45 "# codepoint escapes"
+Eol 20:45--21:1 LF
 Eol 21:1--22:1 LF
 Quote 22:1--22:2 SqlQuote
 Quote 22:2--22:3 SqlQuote
@@ -130,16 +128,16 @@ Whitespace 23:14--23:15 " "
 Comment 23:15--23:30 "# basic sql str"
 Eol 23:30--24:1 LF
 Quote 24:1--24:2 SqlQuote
-StrEscape 24:2--24:4 "'"
+StrEscape 24:2--24:4 '\''
 Quote 24:4--24:5 SqlQuote
 Whitespace 24:5--24:6 " "
 Comment 24:6--24:42 "# sql string with only an apostrophe"
 Eol 24:42--25:1 LF
 Quote 25:1--25:2 SqlQuote
 StdStr 25:2--25:8 "Wouldn"
-StrEscape 25:8--25:10 "'"
+StrEscape 25:8--25:10 '\''
 StdStr 25:10--25:11 "t"
-StrEscape 25:11--25:13 "'"
+StrEscape 25:11--25:13 '\''
 StdStr 25:13--25:15 "ve"
 Quote 25:15--25:16 SqlQuote
 Whitespace 25:16--25:17 " "
