@@ -59,6 +59,18 @@ It's all in preparation for a scope checker/renamer.
 
 Edit/view: https://cascii.app/39b54
 
+## integer overflow types (later: API design)
+
+Hardware wraps, so it's very low-level/fast to expose that, but it's also a common source of bugs, including security vulns (when wrapping occurs prior to allocation).
+Checked arithmetic is safer, but it has implications for the types and semantics of arithmetic operations.
+Let's examine some options for add:
+- result wrapper `add :: Int -> Int -> Maybe Int`: a monadic interface just seems like overkill for ordinary math, I don't think even I'd appreciate it
+- throw exception `add :: Int -> Int -> Int .throws Overflow`: with an effect system, this could look very ergonimic, but any arithmetic might unwind the stack, so effectively every resource has to be aware of exceptions or else leak. I think it might actually lead to _more_ bugs
+- (software) trap `add :: Int -> Int -> Int`: if overflow happens, we jump to an interrupt handler which must either return an int or panic. Another function can install a non-default handler. Types stay not just simple but expected/familiar, and we don't have to worry about leaking resources in transitive callers.
+- C23-like checked arithmetic (a pointer for where to set an overflow bit) `add : Int -> Int -> Int` with an `ST s Carry` effect: another good type, and probably being able to batch overflow handling traps is more efficient and effective (able to see more context than a trap)
+
+Modules `Int` for checked or trapped, use `Int:Wrapping` to opt-in to this particular overflow handling strategy
+
 ## Unicode Syntax
 
 A table that holds pairs of ascii and unicode strings that should be equivalent identifiers.
