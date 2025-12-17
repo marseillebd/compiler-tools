@@ -322,308 +322,229 @@ Separator ::= Semicolon
            |  Colon // qualified names `a:b`, and qualified literals `i32:-1`
 ```
 
-```
-
-Indent :: (Nat X (Positive / +/ \cup* '\t') // indentation is a multiple of one of a positive number of spaces or else a tab
-inc(n*ty) = ((n+1)*ty)
-dec((n+1)*ty) = (n*ty)
-
-Start :: (Indent, CST)
-CST :: (Indent, CST)
-<Start(indent, x)> ::= <CST((0, 0*indent), x)>
-<CST(_, Symbol(x))> ::= <Symbol(x)>
-
-
-////// Atoms //////
-
-// Symbols //
-Symbol :: Str
-<Symbol(\0)> ::= /[:id:]+/ - /[+-]?\d.*/
-<Symbol(\0)> ::= /:{2,3}/
-                 \ <before-sym> _ <after-sym>
-<Symbol(\0)> ::= /.{1,3}/
-                 \ <before-sym> _ <after-sym>
-
-TODO ints, floats, decimal floats, strings, multilines
-
-// help for atoms //
-<before-sym> === <Ws> | <Dot> | <Colon> | /^/ | <Indent(_)>
-<after-sym> === <Ws> | <Dot> | <Colon> | /$/ | <Enclose(_)>
-
-////// Punctuation //////
-
-<Enclose(indent, Round, inner)> ::= /(/ <CST(indent, inner)> /)/
-<Enclose(indent, Square, inner)> ::= /[/ <CST(indent, inner)> /]/
-<Enclose(indent, Curly, inner)> ::= /{/ <CST(indent, inner)> /}/
-<Enclose(indent, Indent, inner)> ::= /{/ <CST(inc(indent), inner)> /}/
-```
-
 Grammar
 =======
 
-FIXME: the problem with the grammar so far is that it's prety loosy-goosy on what any of these symbols mean, and that's because I'm not really sure what tools/power I need to define it.
-1. at the core, rules take the form $A {->} B / \alpha \underscore \beta$ for $A$ a non-terminal, $B, \alpha, \beta$ as a strings of terminals and non-terminals, with $\alpha, \beta$ serving as the context-sensitivity
-1. In addition to the context-sensitivity, we'll also need attribute grammar things; I guess that each non-terminal has an arity (a set of math objects it can encode), and we're gonna write it inside the angle brackets like `<Flo i, z> ::= <int i> <mantissa z>` or smth
-1. The attribute grammar is really specifying a map between an abstract representation of syntax trees and their concrete encoding: the attributes can be thought of as generating the set of strings that would parse into those attrs
-1. e/abnf-like syntax in the rules (we already have concat, but alternation, grouping, and repetition are also safe)
-1. regex syntax for convenient terminal specs, and also regex complement, intersection, and (but reall only) differece
-1. multiple contexts for a rule indicate that it triggers on any of those contexts (I don't trust intersection here)
+The Structure of Input Lines
+----------------------------
 
-To specify the grammar, we use a few stages of definition.
-First, we identify "tokens", which simply group related characters together, mostly with regex.
-Second, we use a mostly context-sensitive (technically non-contracting) grammar to group these raw tokens into "lexemes".
-Finally, we use a context-free grammar to organize lexemes into a "concrete syntax tree" or CST.
+CCS source is line-oriented (see section "Serialization").
+There are two types of lines: standard and embedded.
+Embedded lines are used to build multi-line literals, while standard lines cover everything else.
 
-Throughout these definitions, we distinguish productions from synonyms.
-Productions create nodes in a syntax tree, written like `LHS ::= RHS`.
-Synonyms are a mere convenience for the specification, written like `LHS === RHS`.
-Wherever the LHS of a synonym appears elsewhere in the grammar, it may be replaced with the RHS.
+### Standard Lines
 
+Each standard line has an internal structure, in order: leading indentation, content, and trailing whitespace &/ comment.
+We use the names "indentation", "content", and "backmatter" for these structures.
 
-The first groups individual codepoints into low-level tokens using regular expressions.
-These low-level tokens are labeled with lower-kebab-case inside angle brackets.
-Low-level tokens serve as something like terminal symbols for a context-sensitive grammar.
-The conceptual non-terminals of this context-sensitive grammar are written with Title-Kebab-Case, again inside angle brackets.
-
-Linewise Grammar
-----------------
-
-### Overview
-
-The raw tokens are comprised by only a small set of concepts.
-- Numbers, in both integer and floating point varieties.
-- Symbols, which includes the familiar identifiers, keywords, and operators of popular programming languages.
-  One new feature here is support for mixing characters traditionally thought of as part of either an identifier or an operator.
-  FIXME this is an example: Thus, symbols such as `` or `eqRef?` are valid symbols
-  FIXME this is rationale: The CSS notion of symbol is liberal, but a language implementor may choose to reject unfamiliar symbols downstream.
-- Strings and string templates.
-  Double-quoted strings use familiar C-like escape sequences, and backticks indicate a string splice.
-  Single-quoted strings are like SQL strings: the only escape sequence is two single-quotes to indicate a single-quote.
-  FIXME this is rationale: There are no character literals, as I'd like to encourage _not_ thinking of text in terms of individual codepoints (or bytes!).
-- Punctuation, including brackets, and also common delimiters such as comma and semicolon.
-  In particular, we include period and colon, which we expect eill be used for field access, name qualification, key-value pairing, and the ilk.
-- Whitespace, which may be tabs at the start of the line for indentation, but must otherwise be the space character U+0020.
-- Comments, here considered alongside whitespace, are indicated with a hash character and extend to the end of the line.
-  Multi-line comments, nesting or otherwise, are not supported, because they are either more error-prone or harder to parse and discard.
-
-TODO: examples and rationales for all of these raw token types
-
-> **Aside**
->
-> The design of this stage of the grammar was essential to get right.
-> There are many useful programs that can fruitfully process CCS line-by-line, maintaining only limited state between lines.
-> One of particular note is syntax highlighting: the Language Server Protocol is widespread nowadays,
->   but it is still simpler and easier to set up a text editor's native highlighter if the syntax allows for it.
-> Furthermore, programmer may wish to write simple scripts that analyze a code base in some small way.
-> I would love to have a tool that scans Haskell codebases for any variables containing `/[uU]nsafe/`, but Haskell is not especially easy to parse correctly.
-> So for now I instead rely on `grep` and work around the potential inaccuracies, but an accurate script could be integrated into CI systems, without needing to extend a linter.
-
-### Preliminaries
-
-Regular expressions are written inside slashes, using syntax recognized by PCRE.
-If the closing slash of a regex literal if followed by an `i`, that indicates case-insensitivity (for ASCII codepoints only).
-Additionally, the intersection and complement operators are closed over regular expressions.
-Complement is written with an exclamation mark before the regex (outside the slashes, if present).
-Intersection is written with an ampersand between two regular expressions.
-With complement and intersection, it is easy to also define difference between two regexes, written with a minus sign.
-Literal strings are written enclosed in single-ticks.
-
-Regexes operate line-wise, so the regexes /^/ and /$/ match the beginning and end of a _line_, not the whole file.
-We also use a few custom character classes, such as `[:id:]`.
-
-An additional type of low-level token produced at this stage is <indent>.
-Its definition is a parameter of the grammar, and must match wither the literal `'\t'`, or else `[ ]{n}` for some n >= 1.
-
-The LHS of these rules consist of a single non-terminal, written with a lower-kebab-case name inside angle brackets.
-The RHS consists of a sequence of regular expressions which must match within the line.
-Note that the "non-terminals" may appear on the RHS, and may take on repetition operators.
-Some of these productions have a RHS with an Upper-Kebab-Name; they make more sense to define here, despite strictly belonging to the next stage of parsing, which would otherwise just translate a lower-kebab into an Upper-Kabab.
-
-### Symbols
-### Numbers
-
-Numbers may seem simple on the face of it --- just some digits --- but there is a variety of representations in popular use which complicate their description.
-In addition, while CCS normally applies very little semantics or interpretation, it does specify that some representations numbers are equivalent.
-
-CCS Supports numbers:
-- positive or negative, marked with an optional plus or minus sign (default positive)
-- in four different bases --- binary, octal, decimal, and hexadecimal --- indicated by a radix mark
-- integral or floating point: integers have no decimal point, whereas floating point numbers have a decimal point with digits on both sides
-- an optional exponent on floating point numbers (positive or negative, but always in decimal notation)
-- with digits separated into groups by underscores
-
-TODO: bitwise numbers vs decimal; binary is good for bitfields, hexadecimal is good for byte-oriented data with exactly two digits per byte, octal is mostly historical when multiples of 3-bit groupings were common, but might still find a little use in, say, unix permissions (they would be deprecated or removed if they weren't so easy to support)
-
-
-### Strings
-### Whitespace
-### Punctuation
-
-### FIXME break this up
-
-```
-////// whitespace //////
-
-// recall from the text that <indent> is also a token which may appear at the start of a line
-
-<ws> ::= /[ ]+/
-      |  /#.*$/
-
-////// punctuation //////
-
-<Open-Round> ::= '('
-<Close-Round> ::= ')'
-<Open-Square> ::= '['
-<Close-Square> ::= ']'
-<Open-Curly> ::= '{'
-<Close-Curly> ::= '}'
-
-<semi> ::= ';'
-<comma> ::= ','
-<colon> ::= ':'
-<dot> ::= '.'
-
-<bs> ::= '\'
-
-////// symbols //////
-
-[:id:] === // TODO
-<symbol> ::= /[:id:]+/ - /[+-]?\d/
-
-////// numbers //////
-
-<num> ::= <int> | <flo>
-
-<int> ::= /0b/i <bin-digits>
-       |  /0o/i <oct-digits>
-       |  /0x/i <hex-digits>
-       |        <dec-digits> - /_.*/
-
-<flo> ::= /0b/i <bin-digits>    '.' <bin-digits> <bin-exp>?
-       |  /0o/i <oct-digits>    '.' <oct-digits> <bin-exp>?
-       |  /0x/i <hex-digits>    '.' <hex-digits> <bin-exp>?
-       |        (<dec-digits> - /_.*/) '.' <dec-digits> <dec-exp>?
-
-// support //
-
-<sign> ::= /[+-]/
-<bin-digits> ::= /[0-1]+(_+[0-1]+)*/
-<oct-digits> ::= /[0-7]+(_+[0-7]+)*/
-<dec-digits> ::= /[0-9]+(_+[0-9]+)*/
-<hex-digits> ::= /[0-9a-f]+(_+[0-9a-f]+)*/i
-
-<bin-exp> ::= /p[+-]?/i <dec-digits>
-<dec-exp> ::= /e[+-]?/i <dec-digits>
-
-////// strings //////
-
-// sql strings //
-
-<sql-str> ::= <sq> (<sql-part> | <sql-escape>)* <sq>
-
-<sql-part> ::= /[^']+/ // FIXME and illegal string characters
-<sql-escape> ::= /''/
-
-// standard strings //
-
-<Str>           ::= <dq> (<str-part> | <str-escape>)+ <dq>
-
-<Open-Tempate>  ::= <dq> (<str-part> | <str-escape>)+ <bt>
-<Mid-Tempate>   ::= <bt> (<str-part> | <str-escape>)+ <bt>
-<Close-Tempate> ::= <bt> (<str-part> | <str-escape>)+ <dq>
-
-<str-part> ::= /[^"`\\]+/ // FIXME and illegal string characters
-<str-escape> ::= // TODO
-
-// support //
-
-<sq> ::= /'/
-<dq> ::= /"/
-<bt> ::= /`/
-
-////// multi-line literals //////
-
-// FIXME here, we have to synthesize the delimiter in open, and analyze it in the close, so it's closer to an attribute grammar
-// we represent this with capturing groups on the LHS, and parentheses on the LHS (inside the angle brackets for analyze, outside for synthesize)
-
-<open-multiline>(1) ::= /("{3,}[a-zA-Z}*)/
-<close-multiline(1)> ::= /\1/
-
-<multiline-content> ::= /.*/ // FIXME except _very_ illegal codepoints
-```
-
-NOTE the digits regexes require at least one digit in amongst the underscores. Also, decimal numbers cannot start with an underscore.
-A more restrictive regex could be given, requiring non-empty digit strings separated by underscores, and I might just.
+CSS source lines MAY end in text matching the regex `/\s*(#.*)?$/`.
+If a line does end in this way, the largest matching input sequence is defined as the backmatter.
+We can see it is split into trailing whitespace and a line-delimited comment.
+Systems MUST NOT map two source inputs to different outputs when the inputs differ only in their backmatter.
+Systems MAY allow downstream consumers to process backmatter (e.g. to enable language pragmas, or warn about trailing whitespace).
+We say that a (standard) line is "trivial" when it consists only of backmatter.
 
 > **Rationale**
 >
-> Why are numerical literals so restrictive?
-> - Floating point numbers must have digits on both side of the decimal point?
->   Because the period is used both as a decimal point and as general punctuation (for eg field access), I thought it better that decimal points must be sandwiched between digits.
->   A CCS user may wish `foo.1` to access the first field of the tuple-like value `foo`; if number-like objects can have such elements, is `1.1` a single float, or a field access?
->   Perhaps `.1` is an illegal field, but other fields, such as `.e1` are allowed; then is `1.e1` represent 10.0, or the `e1` field of the number 1?
->   TODO I might not allow prefix-dot in this standard, but a language may wish `a .cmp(b)` to be an infix call, equivalent to `cmp(a, b)`;
->     then is `a .1` a symbol followed by a floating point literal, or equivalent to the call `1(a)`?
->   Some of these answers may seem obvious based on your subjective experience or ability to imagine new language features.
->   This standard strives for the answers to be obvious regardless of past programming experiences --- the ergonomic principle.
-> - No power on integers?
->   Because even a small number of digits in the exponent might cause simple big integer libraries to exhaust memory.
->   I suggest using floats for things that require an exponent
-> - Exponents can only be written in decimal?
->   Non-decimal numbers are generally used to determine bit patterns, which is not as useful for floating point numbers.
->   An exponent should just tell us how many places to shift the decimal point.
->   If there is a practical use case demonstrated, I may consider an extension.
+> Note that CSS only has line-delimited comments, not block comments.
+> Nesting block comments are context-free, which excludes simple lexers (see the Simple principle).
+> Non-nesting block comments can be a source of confusion and busywork when attempting to comment out a lot of code but get interrupted by an existing block comment (see the Ergonomic principle).
 >
-> On the otherhand, these literals are also quite permissive.
-> The support four different radices uniformly, with support for integral, fractional, and fractional+exponent forms.
-> Additionally, digit separators are allowed, which should make it easier to understand `1_000_000_000` compared to `1e9` (not to mention `1000000000`).
+> Line-delimited comments are sufficient, easy to parse, already support nesting (line comments trivially embed within themselves), and have good editor support.
+> Many languages, especially scripting languages already eschew block comments without attracting complaints.
 
-Scratch Work - DELETE
----------------------
+Compliant source MUST have every non-trivial line begin with zero or more repetitions of the "indent sequence".
+This is the indentation, and the "indentation level" of the line is the number of repetitions.
+The indent sequence MUST be either a non-zero number of space characters or a single tab character.
+The indent sequence MUST NOT vary between lines, but MAY vary between separate sources.
+Compliant source MUST have its first non-empty content line be unindented (zero indentation level).
+Compliant source MUST NOT have whitespace at the start (or end) of each line's content.
 
-```
-<Comment> ::= '#' /.*$/
-<Eol> ::= <Lws>? <Comment>? /$/
+> **Rationale**
+>
+> As far as I can see, there is no reason to vary the size of an indent within a file.
+> The only widely-used ways to indent are either with tabs or some number spaces.
+> I don't know of any reason why one would want _multiple_ tabs to indicate a single indent level.
+>
+> I am willing to deprecate tab as an indent sequence due to its unpredictability in text rendering (especially for manipulated text).
+> However, I also see no oreason to get into tabs vs spaces, and so it is included from the outset.
+> Perhaps someday, we'll have our entire tool suite just render indentation semantically.
 
-!<ws> <Ws> !<ws> ::= !<ws> <ws> !<ws>
-```
+A compliant system MUST begin parsing CSS source as standard lines.
+When (and only when) a line's contents contains a multi-line string delimiter, the subsequent lines will be parsed as embedded, up to but noto including a line matching the end delimiter.
+Multi-line string delimiters are described as part of the tokenization process.
 
+### Embedded Lines
 
-FIXME: this grammar needs to be parameterized by an indentation token, which must be of the form `/[ ]{n}|\t/` for some n >= 1.
+Embedded lines also have internal structure, in order: leading indentation, and content.
+An embedded line which matches `/^\s*$/` is called "trivial".
 
-TODO: I'm kinda separating raw tokens/character sequences with lowercase names, and committed tokens as Titlecase names
+A non-trivial embedded line must begin with a number of indent sequences equal to the indentation level of the line holding the multi-line string's open delimiter.
+This is the indentation part of the line, and the rest is content.
+The rest of the line is content, and unlike standard line content, MAY begin with whitespace.
+The content of embedded lines may also contain tabs anywhere.
+
+A trivial line has fewer restrictions on its indentation.
+Either the expected indentation (as for non-trivial embedded lines) is a prefix of the trivial line,
+    in which case that prefix forms the indent part and the remainder the content,
+    or else the entire line is a prefix of the expected indentation,
+    in which case it is valid indentation and the content is empty.
+Once indentation has been stripped from embedded lines, it is no longer necessary.
+
+> **Ratinoale**
+>
+> We want to be able to embed arbitrary text into CCS for later processing.
+> Arbitrary text may contain leading whitespace, often not at all what is expected (consider makefiles, which must have tab-indentation).
+> We also don't want to break the "offsides rule": that semantic objects cannot contain syntax less-indented than its start/end delimiters.
+> The combination of these constraints means we need a rule to determine what part of the embedded line is indented and which is not.
+>
+> The limitation to fixed multiples of an indent sequence gives us an easy solution: just use the last indent level.
+> We relax this for trivial lines, since we would like to avoid trailing whitespace characters in all contexts: it should not alter the semantics.
+>
+> It might be possible to require an additional indent level for the embedded lines beynod the level of the open delimiter.
+> I decided against this because I would like unindented multiline literals (eg for documentation strings) to not need indentation on the embedded lines.
+> I suspect in real languages, it will not be an issue that these embedded lines are not further indented, as most literals will simply be bound to identifiers immediately, rather than being part of a larger expression.
+
+Any line beginning with the matching multi-line string delimiter, possibly after whitespace, ends the sequence of embedded lines.
+While such a series of inputs MUST end the literal regardless, the line of source that terminates the literal MUST have the same indentation level as the rest of the literal and the line it started on.
+The contents of the multi-line string literal are just the contents of the embedded lines within it.
+Because the content ofo the lines are kept separate, it is left to downstream to decide how (or whether!) to glue these lines together (with what newline characters, and whether there's a newline at the end are reasonable variations).
+Wherever possible, the unmoodified structure of the lines, including source positions, SHOULD be sent downstream.
+
+> **Rationale**
+>
+> In the interest of making quick-and-dirty lexers easy to write, we have formulated these rules so that a system need not track indentation levels merely to classify lines as either standard or embedded.
+> This comes with the added benefit that it is difficult to confuse a human reader by (accidentally) altering indentation level of the end delimiter:
+>   the reader need not care about the details of whitespace, the system will correct any writers.
 
 Tokens
-```
+------
 
-////// Punctuation //////
+### Basic Tokens
 
-// NOTE these are _equal_ signs, so they are _synonyms_, not prductions
-<open> = <open-round> | <open-square> | <open-curly>
-<close> = <close-round> | <close-square> | <close-curly>
+Each line of standard content is broken into tokens according to the following table.
+Matching is according to regex rules, each beginning at the start of unprocessed input and extending as far as possible.
+We use the syntax `<foo>` in these rules to serve as points for longer, less redable regexes to be substituted.
+Those helper regexes are defined in the list below.
+Note that some listed tokens (comment, indentation) cannot appear in the content of a line, but we have listed them anyway for quick reference.
 
-    <non-dot>  <Dot>  <non-dot>
-::= <non-dot>  <dot>  <non-dot>
+| name                    | regex                              | notes |
+|-------------------------|------------------------------------|-------|
+| enclosing punctuation   | `[()[\]{}]`                        |       |
+| separating punctuation  | `[,;]|\.+|:+`                      |       |
+| whitespace              | `[ ]+`                             |       |
+| indentation             | `^[ \t]+`                          |       |
+| comment                 | `#.*`                              |       |
+| symbol                  | `[:id:]+` - `[+-]?[0-9].*`         |       |
+| backslash               | `\\`                               |       |
+| decimal int             | `<sign><dec>`                      |       |
+| binary int              | `<sign>0[bB]<bin>`                 |       |
+| octal int               | `<sign>0[oO]<oct>`                 |       |
+| hexadecimal int         | `<sign>0[xX]<hex>`                 |       |
+| deciaml float           | `<sign><dec>\.<dec>(e<exp>)?`      |       |
+| binary float            | `<sign>0[bB]<bin>\.<bin>(p<exp>)?` |       |
+| octal float             | `<sign>0[oO]<oct>\.<oct>(p<exp>)?` |       |
+| hexadecimal float       | `<sign>0[xX]<hex>\.<hex>(p<exp>)?` |       |
+| "sql" string            | `'([^']+|'')*'`                    |       |
+| string literal          | `"<str>*"`                         |       |
+| open string template    | `` "<str>*` ``                     |       |
+| middle string template  | `` `<str>*` ``                     |       |
+| close string template   | `` `<str>*" ``                     |       |
+| multiline delimiter     | `"""+[A-Za-z]*`                    |       |
 
-    <non-colon>  <Colon>  (/$/ | <ws>)
-::= <non-colon>  <colon>  (/$/ | <ws>)
-    /[:id::quote:]/  <Qual>   /[:id::quote:]/ // FIXME uses :id: and :quote:, and might need more
-::= /[:id::quote:]/  <colon>  /[:id::quote:]/
+Regex Abbreviations:
+- for symbols:
+    - `[:id:] === [-_a-zA-Z0-9!$%&*+/<=>?@^|~]`
+- for numbers:
+    - `<sign> === [+-]?`
+    - `<bin> === [01]+(_[01]+)*`
+    - `<oct> === [0-7]+(_[0-7]+)*`
+    - `<dec> === [0-9]+(_[0-9]+)*`
+    - `<hex> === [0-9a-fA-F]+(_[0-9a-fA-F]+)*`
+    - `<exp> === <sign><dec>`
+- for strings:
+    - `<str> === <strChar>+|\\(<cEsc>|<xEsc>|<uEsc>)`
+    - ``<strChar> === [^"`\\]`
+    - ``<cEsc> === \\[0abefnrt'"`\\]``
+    - `<xEsc> === x[0-9a-fA-F]{2}`
+    - `<uEsc> === u\{[0-9a-fA-F]{1,6}\}`
 
-////// Symbols //////
+> **Rationale**: Numerical Literals
+>
+> Binary, octal, deciaml, and hexadecimal literals are all in common use.
+> Of these, octal is perhaps the least used, as 3n-bit groups usually do not align well with 8-bit byte computation.
+> However, there is at least one thing (file permissions) that still group naturally in threes, so I'm loath to throw it out.
+>
+> Integer and floating point literals are generally very different numerical representations.
+> Making a type or especially confusing them while skimming could lead to bugs.
+> Additioally, the dot operator is often used in programming languages, but we would like to keep it clearly separate (again for typ/skimming reasons) from the decimal point.
+> We have chosen that all floating point literals contain a decimal point, and that there must be digits on either side of that decimal point.
+>
+> Only floating point literals are allowed to have exponents.
+> It is expected that floats have limited precision which can slide across a range of magnitures, and that they may be rouonded or converted to non-number values (+/- inf, NaN).
+> The same does not hold true for ordinary integer data, which we expect may be stored in a precise format.
+> Allowing large exponents for integers literals may even consume all available memory when the parser represents them.
+> Thus, only floating piont literals are allowed to have an exponent.
+> In the future, I may have `<dec>^<dec>` for large, simple, positive numbers like `2^21` or `10^12`, but I doubt I'd allow anything other than positive decimal integers represented this way.
+>
+> Only decimal expoonents are allowed, because their purpose is to encode how far to shift the decimal point, for which we need not care about bit representations.
+> Binary, octal, and hexadeciaml are meant to easily represent bit-patterns, not express simple counts.
 
-<symbol> ::= /[:id:]+/ - /[+-]?[0-9].*/ // FIXME I need to be clear about regex subtraction
+> **Rationale**: Strings
+>
+> Sql strings are included as a way to write strings that commonly have embedded backslashes (or other special characters), such as regular expressions or Windows filepaths.
+> The only escape character is tick, which is its delimiter, and the only escapable character is the tick character.
+> This makes them very easy to parse, and usuallyeasy to write, as long as it doesn't contain many contractions.
+>
+> Double-quote strings can be templated using backticks.
+> The intention is that CCS inside backticks would be evaluated and spliced into the string.
+> The escape sequences are drawn from major programming languages.
+>
+> The multiline delimiter changes the syntax of following lines, and so should be carefully detected.
+> Thankfully, the triple-quote sequence it must contain cannot appear in any tokens other than comments and sql strings, making them simple to identify.
 
-    <Symbol> /[^0-9]/
-::= <symbol> /[^0-9:id:]/
+If a multiline delimiter is at the start of a line's content and the prior line is embedded, that is a closing delimiter.
+Otherwise, it is an opening delimiter.
+A single line can have at most one opening multiline delimiter and at most one closing multiline delimiter.
 
-    (/^/ | <ws> | <open>)  <Symbol>                  (/$/ | <ws> | <close>)
-::= (/^/ | <ws> | <open>)  <dot> <dot> <dot>?        (/$/ | <ws> | <close>)
- |  (/^/ | <ws> | <open>)  <colon> <colon> <colon>?  (/$/ | <ws> | <close>)
+### Assembling Lines
 
-```
+TODO we join the tokenized lines together like so:
+- emit tokens from the first line (which will be standard), then continue to the next line
+- if the line is standard, emit indentation tokens, then the tokens from the line
+    - if the indent of this line is one more than the last, emit an indent token
+    - if it is the same as the last, emit a nextline token
+    - if it is less than the last, emit dedent tokens in number equal to the difference
+    - if it is more than one level more than the last, that is an error
+- if the line has an open multiline delimiter, emit a multiline token
+    - the token begins at the open delimiter and ends at the close delimiter (on the next standard line)
+    - the token contains all the embedded lines between the delimiters
+    - continue emitting tokens from the next line from after the close delimiter
 
+### Tokens in Context
 
+TODO
+- atoms are symbols, numbers, and strings (incl multiline)
+- atoms cannot appear adjacent to each other
+- an "implicit chain" aka "subscript" token is inserted between
+    - an atom followed by open punctuation
+    - open punctuation followed by open punctuation
+- a "chain" aka "access" token is a single dot sandwiched between
+    - two atoms
+    - close punctuation and an atom
+    - ? an atom and open punctuation
+    - ? open punctuation and open punctuation
+- a single colon can be
+    - a "pairing" token when there is whitespace on the right
+    - a "block marker" when it is at the end of a line
+    - a "qualifier" token when sandwiched between
+        - ?? two symbols
+        - ? a symbol and a literal
+- other colons and dots, up to a length of three, are symbols
+    - ? including single dot
+    - ? including single colon
+    - subject to the rule that atoms cannot be adjacent
+- colons/dots with a length over three are illegal
 
 Serialization
 =============

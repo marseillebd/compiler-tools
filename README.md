@@ -17,6 +17,12 @@ I've put some stuff off:
 
 It's all in preparation for a scope checker/renamer.
 
+# Known Issues
+
+- I'm not tracking byte offsets in the decoder, which affects downstream
+- I'm allowing integers with powers; knock that off
+- I've got loads of calls to `unwrapOrPanic . mkSpan` which indicate I need a real API
+
 # Ideas
 
 ## The Vision
