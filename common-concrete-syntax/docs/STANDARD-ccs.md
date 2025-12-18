@@ -441,10 +441,10 @@ Note that some listed tokens (comment, indentation) cannot appear in the content
 | binary int              | `<sign>0[bB]<bin>`                 |       |
 | octal int               | `<sign>0[oO]<oct>`                 |       |
 | hexadecimal int         | `<sign>0[xX]<hex>`                 |       |
-| deciaml float           | `<sign><dec>\.<dec>(e<exp>)?`      |       |
-| binary float            | `<sign>0[bB]<bin>\.<bin>(p<exp>)?` |       |
-| octal float             | `<sign>0[oO]<oct>\.<oct>(p<exp>)?` |       |
-| hexadecimal float       | `<sign>0[xX]<hex>\.<hex>(p<exp>)?` |       |
+| deciaml float           | `<sign><dec>\.<dec>(<dExp>)?`      |       |
+| binary float            | `<sign>0[bB]<bin>\.<bin>(<bExp>)?` |       |
+| octal float             | `<sign>0[oO]<oct>\.<oct>(<bExp>)?` |       |
+| hexadecimal float       | `<sign>0[xX]<hex>\.<hex>(<bExp>)?` |       |
 | "sql" string            | `'([^']+|'')*'`                    |       |
 | string literal          | `"<str>*"`                         |       |
 | open string template    | `` "<str>*` ``                     |       |
@@ -461,7 +461,8 @@ Regex Abbreviations:
     - `<oct> === [0-7]+(_[0-7]+)*`
     - `<dec> === [0-9]+(_[0-9]+)*`
     - `<hex> === [0-9a-fA-F]+(_[0-9a-fA-F]+)*`
-    - `<exp> === <sign><dec>`
+    - `<dExp> === [eE]<sign><dec>`
+    - `<bExp> === [pP]<sign><dec>`
 - for strings:
     - `<str> === <strChar>+|\\(<cEsc>|<xEsc>|<uEsc>)`
     - ``<strChar> === [^"`\\]`

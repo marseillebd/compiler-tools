@@ -1,6 +1,7 @@
 module Language.CCS.Lexer.Morpheme
   ( CCS(..)
   , Token(..)
+  , StrToken(..)
   , annotation
   , PunctuationType(..)
   , BracketType(..)
@@ -12,53 +13,63 @@ module Language.CCS.Lexer.Morpheme
 
 import Data.Text (Text)
 import GHC.Records (HasField(..))
+import Language.Location (Span)
 import Language.Nanopass (deflang)
+import Language.Text (SrcText)
 
 [deflang|
-((CCS loc)
+(CCS
 
   (Token
-    (Symbol loc Text)
-    (Sign loc Sign)
-    (Radix loc Radix)
-    (Digits loc Integer Int)
-    (Power loc)
-    (Punctuation loc PunctuationType)
-    (Quote loc QuoteType)
-    (StdStr loc Text)
-    (StrEscape loc Char)
-    (Eol loc EolType)
-    (Whitespace loc Text)
-    (Comment loc Text)
-    (Illegal loc Text)
+    (Symbol SrcText)
+    (Number Span
+      Sign
+      Radix
+      Integer
+      (? (& Integer Int))
+      (? Integer)
+    )
+    (Str Span QuoteType (* StrToken) (? QuoteType))
+    (MlDelim SrcText)
+    (MlContent SrcText)
+    (Punctuation Span PunctuationType)
+    (Quote Span QuoteType)
+    (Eol Span EolType)
+    (Whitespace SrcText)
+    (Comment SrcText)
+    (Illegal SrcText)
+  )
+
+  (StrToken
+    (StdStr SrcText)
+    (StrEscape Span Char)
+    (IllStr Span Text)
   )
 
 )
 |]
 -- TODO the argument for Symbol should enforce the invariants on how Symbols may be spelled
 
-deriving instance Show a => Show (Token a)
-deriving instance Functor Token
+deriving instance Show Token
+deriving instance Show StrToken
 
-annotation :: Token a -> a
-annotation (Symbol a _) = a
-annotation (Sign a _) = a
-annotation (Radix a _) = a
-annotation (Digits a _ _) = a
-annotation (Power a) = a
+annotation :: Token -> Span
+annotation (Symbol a) = a.span
+annotation (Number a _ _ _ _ _) = a
+annotation (Str a _ _ _) = a
+annotation (MlDelim a) = a.span
+annotation (MlContent a) = a.span
 annotation (Punctuation a _) = a
 annotation (Quote a _) = a
-annotation (StdStr a _) = a
-annotation (StrEscape a _) = a
 annotation (Eol a _) = a
-annotation (Whitespace a _) = a
-annotation (Comment a _) = a
-annotation (Illegal a _) = a
+annotation (Whitespace a) = a.span
+annotation (Comment a) = a.span
+annotation (Illegal a) = a.span
 
 data PunctuationType
   = Open BracketType
   | Close BracketType
-  | Comma | Dot | Colon | Semicolon
+  | Comma | Dots Int | Colons Int | Semicolon
   | Backslash
   deriving (Eq, Show)
 data BracketType = Round | Square | Curly

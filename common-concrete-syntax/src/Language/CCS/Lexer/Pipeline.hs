@@ -6,34 +6,37 @@ module Language.CCS.Lexer.Pipeline
   , linesFrom
   ) where
 
-import Prelude hiding (lex, lines)
+import Prelude hiding (lex, lines, exp)
 
+import Control.Applicative ((<|>))
 import Data.Char (chr, ord, isOctDigit, isDigit, isHexDigit, toLower)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.Maybe (catMaybes)
+import Data.Maybe (fromJust)
 import Data.Text (Text)
 import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
-import Language.Location (Span, mkSpan, spanFromPos, Pos, startPos, incLine, incCol)
-import Language.CCS.Lexer.Morpheme (Token(..), annotation)
-import Language.CCS.Lexer.Morpheme (QuoteType(..), EolType(..))
 import Language.CCS.Lexer.Morpheme (PunctuationType(..), BracketType(..))
+import Language.CCS.Lexer.Morpheme (QuoteType(..), EolType(..))
 import Language.CCS.Lexer.Morpheme (Sign(..), Radix(..))
+import Language.CCS.Lexer.Morpheme (Token(..), StrToken(..))
+import Language.Location (mkSpan, spanFromPos, Pos, startPos, incLine, incCol)
+import Language.Text (SrcText)
 
-import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
 import qualified Data.Text.Encoding.Error as Codec
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Codec
+import qualified Language.Text as Src
 
-pipeline :: LBS.ByteString -> [Token Span]
+pipeline :: LBS.ByteString -> [Token]
 pipeline = pipelineFrom startPos
 
-pipelineFrom :: Pos -> LBS.ByteString -> [Token Span]
+pipelineFrom :: Pos -> LBS.ByteString -> [Token]
 pipelineFrom pos0 bytes = bytes
   & decode
   & linesFrom pos0
-  & lex StdLex
+  & lexLines
 
 -- NOTE should this helper be here?
 advInLine :: Pos -> Text -> Pos
@@ -52,20 +55,18 @@ decode bytes = placeholder
 ------ Split Lines ------
 -------------------------
 
-data Line = Line
-  { content :: Text
-  , loc :: Span
+data Line a = Line
+  { line :: a
   , eol :: EolType
   }
 
-lines :: LT.Text -> [Line]
+lines :: LT.Text -> [Line SrcText]
 lines = linesFrom startPos
 
-linesFrom :: Pos -> LT.Text -> [Line]
+linesFrom :: Pos -> LT.Text -> [Line SrcText]
 linesFrom _ LT.Empty = [] -- NOTE this means a zero-byte file will have an empty list of lines; anything else will have at least one line (possibly blank ofc)
 linesFrom l str = Line
-  { content
-  , loc = unwrapOrPanic_ $ mkSpan l r
+  { line = Src.fromPos l (LT.toStrict lazyContent)
   , eol
   } : maybe [] (linesFrom nextLine) rest
   where
@@ -75,331 +76,379 @@ linesFrom l str = Line
     (pre, '\r' LT.:< '\n' LT.:< post) -> (pre, CRLF, Just post)
     (pre, '\r' LT.:<            post) -> (pre, CR,   Just post)
     _ -> internalError "expected an end of line sequence after preaking on `\\n|\\r`"
-  content = LT.toStrict lazyContent
-  r = T.foldl' (\pos _ -> incCol pos) l content
   nextLine = incLine l
 
 ----------------------------
 ------ Coverage Lexer ------
 ----------------------------
 
+-- We use @lex*@ to indicate functions that produce tokens based on 'Src.consume'.
+-- Thus, they are not composable, but can be "tail-called" from another lex-fuction.
+-- Meanwhile @take*@ functions produce output based only on what it consumes.
+-- Thus, they _are_ composable, and can be used freely in other take- or lex-functions.
+
+------ Main ------
+
+lexLines :: [Line SrcText] -> [Token]
+lexLines = loop StdLex
+  where
+  loop :: LexMode -> [Line SrcText] -> [Token]
+  loop mode (l:ls) = toks ++ (end : loop mode' ls)
+    where
+    (toks, mode') = lexLine mode l.line
+    end = case l.eol of
+      Eof -> Eol (spanFromPos l.line.span.end) l.eol
+      _ -> Eol (unwrapOrPanic_ $ mkSpan l.line.span.end (incLine l.line.span.end)) l.eol
+  loop _ [] = []
+
 data LexMode
   = StdLex
-  | NumLex Radix
-  | SqLex
-  | DqLex
   | TqLex Text
 
--- > ┌─────┐
--- > │ std │◀───────────────────────────────────────────────┐
--- > └─────┘                                                │
--- >    │                                                   │
--- >    │                                                   │
--- >    │──▶ # ──▶ .* ─────────────────────▶ Comment ──────▶│
--- >    │                                                   │
--- >    │                                                   │
--- >    │──▶ [\t ] ──▶ [\t ]* ─────────────▶ Lws ──────────▶│
--- >    │                                                   │
--- >    │                                                   │
--- >    │──▶ [()[\]{},.:;\\] ──────────────▶ Punctuation ──▶│
--- >    │                                                   │
--- >    │                                                   │
--- >    │──▶ [:id0:] ────────┐                              │
--- >    │                    │─▶ [:id:]* ──▶ Identifier ───▶│
--- >    │──▶ [+-](?![^0-9]) ─┘
--- >    │
--- >    │
--- >    │──▶ [+-](?:[0-9]) ──▶ Sign ──┐                  ┌─────┐
--- >    │                             │─────────────────▶│ num │
--- >    │──▶ (?:0-9]) ────────────────┘                  └─────┘
--- >    │
--- >    │                                                ┌───────┐
--- >    │──▶ ' ────────────────────▶ OpenStr ───────────▶│ sqStr │
--- >    │                                                └───────┘
--- >    │                                                ┌───────┐
--- >    │──▶ "(?!"")|` ────────────▶ OpenStr ───────────▶│ dqstr │
--- >    │                                                └───────┘
--- >    │
--- >    │──▶ """ ──▶ "*[a-zA-Z]* ──▶ OpenStr
--- >                                    │
--- >                                    │──▶ [\t ]+ ─▶ Lws
--- >                                    │               │
--- >                                    │◀──────────────┘
--- >                                    │
--- >                                    │──▶ #.* ──▶ Comment
--- >                                    │               │
--- >                                    │◀──────────────┘
--- >                                    │                ┌───────┐
--- >                                    └──▶ $ ─────────▶│ tqStr │
--- >                                                     └───────┘
+lexLine :: LexMode -> SrcText -> ([Token], LexMode)
+lexLine StdLex = loop []
+  where
+  loop revacc src = case lexStd src of
+    Just (tok@(MlDelim delim), rest) -> drain delim.text (tok : revacc) rest
+    Just (tok, rest) -> loop (tok : revacc) rest
+    Nothing -> (reverse revacc, StdLex)
+  drain delim revacc src = case lexAfterMlDelim src of
+    Just (tok, rest) -> drain delim (tok : revacc) rest
+    Nothing -> (reverse revacc, TqLex delim)
+lexLine (TqLex delim) = loop []
+  where
+  loop revacc src = case lexTq delim src of
+    Just (tok@(MlDelim _), rest) -> drain (tok : revacc) rest
+    Just (tok, rest) -> loop (tok : revacc) rest
+    Nothing -> (reverse revacc, TqLex delim)
+  drain revacc src = case lexAfterMlDelim src of
+    Just (tok, rest) -> drain (tok : revacc) rest
+    Nothing -> (reverse revacc, StdLex)
 
-stdLex :: Pos -> (Char, Text) -> LexerStep
-stdLex l (c, cs) = case classify c of
-  -- comments
-  Hash -> (Comment l (c T.:< cs), Left [], StdLex)
-  -- linear whitespace
-  Lws ->
-    let (lws, r, rest) = _takeClasses (==Lws) (l, c, cs)
-     in (Whitespace l lws, Right (r, rest), StdLex)
-  -- punctuation
-  Punct pTy -> (Punctuation l pTy, Right (incCol l, cs), StdLex)
-  -- symbols
-  Id0 ->
-    let (sym, r, rest) = _takeClasses (`elem` [Id0, Sgn, Num]) (l, c, cs)
-     in (Symbol l sym, Right (r, rest), StdLex)
-  Sgn -> case cs of
-    T.Empty -> (Symbol l (T.singleton c), Left [], StdLex)
-    c' T.:< _ | classify c' /= Num ->
-      let (sym, r, rest) = _takeClasses (`elem` [Id0, Sgn, Num]) (l, c, cs)
-      in (Symbol l sym, Right (r, rest), StdLex)
-  -- numbers
-      | otherwise ->
-        let sign = unwrapOrPanic_ $ parseSign c
-         in (Sign l sign, Right (incCol l, cs), NumLex Base10)
-  Num -> numLex Base10 l (c, cs)
-  -- inline strings
-  SQuote ->
-    (Quote l SqlQuote, Right (incCol l, cs), SqLex)
-  BtQuote ->
-    (Quote l Backtick, Right (incCol l, cs), DqLex)
-  DQuote | not $ "\"\"" `T.isPrefixOf` cs ->
-    (Quote l DblQuote, Right (incCol l, cs), DqLex)
-  -- multiline strings
-         | otherwise ->
-    let (quotes, nameL, afterQuotes) = _takeClasses (==DQuote) (l, c, cs)
-        (name, lwsL, afterName) = _spanClasses (==Id0) (nameL, afterQuotes) -- NOTE I've over-allowed the quote name, it should match [a-zA-Z], not [:id0:]
-        (lws, illL, afterLws) = _spanClasses (==Lws) (lwsL, afterName)
-        (ill, commentL, afterIll) = _spanClasses (/=Hash) (illL, afterLws)
-        -- construct tokens
-        delim = quotes <> name
-        extraTokens = catMaybes
-          [ if T.null lws then Nothing else Just $
-            Whitespace lwsL lws
-          , if T.null ill then Nothing else Just $
-            Illegal illL ill
-          , case afterIll of
-            T.Empty -> Nothing
-            hash T.:< _
-              | classify hash == Hash -> Just $ Comment commentL afterIll
-              | otherwise -> internalError "did not consume until comment or eol after start of multi-line string"
-          ]
-     in (Quote l (MlQuote delim), Left extraTokens, TqLex delim)
-  -- error recovery
-  Ill ->
-    let (ill, r, rest) = _takeClasses (==Ill) (l, c, cs)
-     in (Illegal l ill, Right (r, rest), StdLex)
+lexStd :: SrcText -> Maybe (Token, SrcText)
+lexStd src | Src.null src = Nothing
+lexStd src = case Src.runParse src parser of
+  Just (_, tok, rest) -> Just (tok, rest)
+  Nothing -> internalError "coverage token parsing failed somehow"
+  where
+  parser = do
+    c <- Src.sat (const True)
+    case classify c of
+    -- numbers and symbols
+      Id0 -> lexSymbol
+      Num -> do
+        (radix, firstDigit) <- takeRadix (Just c)
+        lexNumber Positive radix firstDigit
+      Sgn sign -> do
+        isNum <- Src.look 1 <&> \case
+          next T.:< _ -> isDigitIn Base10 next
+          _ -> False
+        if isNum
+        then do
+          (radix, firstDigit) <- takeRadix Nothing
+          lexNumber sign radix firstDigit
+        else lexSymbol
+    -- punctuation
+      Punct (Dots _) -> do
+        _ <- Src.takeWhile (== '.')
+        dots <- Src.consumed
+        pure $ Punctuation dots.span (Dots $ T.length dots.text)
+      Punct (Colons _) -> do
+        _ <- Src.takeWhile (== ':')
+        colons <- Src.consumed
+        pure $ Punctuation colons.span (Colons $ T.length colons.text)
+      Punct ty ->
+        Punctuation <$> (Src.consumed <&> (.span)) <*> pure ty
+    -- strings
+      SQuote -> lexSqString
+      DQuote -> do
+        isTqStr <- Src.tryN 2 $ \case
+          "\"\"" -> Right True
+          _ -> Left False
+        if not isTqStr
+        then lexDqString DblQuote
+        else lexTqStr
+      BtQuote -> lexDqString Backtick
+    -- whitespace
+      Lws -> do
+        _ <- Src.takeWhile (`T.elem` " \t")
+        Whitespace <$> Src.consumed
+      Hash -> do
+        _ <- Src.takeAll
+        Comment <$> Src.consumed
+    -- illegal tokens
+      Ill -> do
+        _ <- Src.takeWhile ((== Ill) . classify)
+        Illegal <$> Src.consumed
 
--- > ┌─────┐
--- > │ num │◀──────────────────────────────┐
--- > └─────┘                               │
--- >    │                                  │
--- >    │                                  │
--- >    │──▶ [+-] ────────▶ Sign ─────────▶│
--- >    │                                  │
--- >    │                                  │
--- >    │──▶ 0[boxBOX] ───▶ Radix ────────▶│
--- >    │                                  │
--- >    │                                  │
--- >    │──▶ [:digit:]+ ──▶ Digits ───────▶│
--- >    │                                  │
--- >    │                                  │
--- >    │──▶ [.] ─────────▶ Punctuation ──▶│
--- >    │                                  │
--- >    │                                  │
--- >    │──▶ [:power:] ───▶ Power ────────▶│
--- >    │
--- >    │
--- >    │                               ┌─────┐
--- >    │──▶(?![:digit::power:.+-]) ───▶│ std │
--- >                                    └─────┘
+lexTq :: Text -> SrcText -> Maybe (Token, SrcText)
+lexTq _ src | Src.null src = Nothing
+lexTq delim src = case Src.runParse src parser of
+  Just (_, tok, rest) -> Just (tok, rest)
+  Nothing -> internalError "coverage token parsing failed somehow"
+  where
+  parser
+     =  do
+        _ <- Src.takeWhile1 (`T.elem` " \t")
+        Whitespace <$> Src.consumed
+    <|> do
+        _ <- Src.takePrefix delim
+        delim' <- Src.consumed
+        pure $ MlDelim delim'
+    <|> do
+        _ <- Src.takeAll
+        MlContent <$> Src.consumed
 
-numLex :: Radix -> Pos -> (Char, Text) -> LexerStep
-numLex radix l (c, cs) = if
-  -- sign
-  | Just sign <- parseSign c ->
-     (Sign l sign, Right (incCol l, cs), NumLex radix)
-  -- radix
-  | c == '0'
-  , c' T.:< rest <- cs
-  , Just newRadix <- parseRadix c' ->
-    let r = incCol . incCol $ l
-     in (Radix l newRadix, Right (r, rest), NumLex newRadix)
-  -- digits
-  | isDigitIn radix c ->
-    let (digits, r, rest) = _spanBy (isDigitIn radix) (incCol l, cs)
-        (i, len) = unwrapOrPanic_ $ (parseDigitsIn radix) (c : T.unpack digits)
-     in (Digits l i len, Right (r, rest), NumLex radix)
-  -- "decimal" point
-  | c == '.' ->
-    (Punctuation l Dot, Right (incCol l, cs), NumLex radix)
-  -- "times <radix> to the"
-  | toLower c == powerLetter radix ->
-     (Power l, Right (incCol l, cs), NumLex Base10)
-  -- end of number parts, revert to standard
-  | otherwise -> stdLex l (c, cs)
+------ Symbols ------
 
-powerLetter :: Radix -> Char
-powerLetter Base2 = 'p'
-powerLetter Base8 = 'p'
-powerLetter Base10 = 'e'
-powerLetter Base16 = 'p'
+lexSymbol :: Src.Parse Token
+lexSymbol = do
+  _ <- Src.takeWhile isId
+  Symbol <$> Src.consumed
+  where
+  isId c = case classify c of
+    Id0 -> True
+    Num -> True
+    Sgn _ -> True
+    _ -> False
 
--- > ┌───────┐
--- > │ sqstr │◀───────────────────────────────┐
--- > └───────┘                                │
--- >     │                                    │
--- >     │                                    │
--- >     │                                    │
--- >     │──▶ [^'] ──▶ [^']* ──▶ Unescaped ──▶│
--- >     │                                    │
--- >     │                                    │
--- >     │──▶ '' ──────────────▶ Escape ─────▶│
--- >     │
--- >     │
--- >     │                                 ┌─────┐
--- >     │──▶ '(?!') ────▶ CloseStr ──────▶│ std │
--- >                                       └─────┘
+------ Numbers ------
 
-sqLex :: Pos -> (Char, Text) -> LexerStep
-sqLex l (c, cs) = case classify c of
-  SQuote -> case cs of
-  -- escaped sequence
-    c' T.:< rest | classify c' == SQuote ->
-      (StrEscape l '\'', Right (incCol $ incCol l, rest), SqLex)
-  -- end of string
-    _ -> (Quote l SqlQuote, Right (incCol l, cs), StdLex)
-  -- standard string part
-  _ ->
-    let (str, r, rest) = _takeClasses (/=SQuote) (l, c, cs)
-     in (StdStr l str, Right (r, rest), SqLex)
+lexNumber :: Sign -> Radix -> Text -> Src.Parse Token
+lexNumber sign radix firstDigit = do
+  -- integer part
+  intDigits <- takeDigits radix firstDigit
+  let intPart = fst $ parseDigitsIn radix (T.unpack intDigits)
+  -- fractional part
+  hasDecimalPoint <- takeDecimalPoint
+  fracDigits <- if hasDecimalPoint
+    then Just <$> Src.takeWhile (isDigitIn radix)
+    else pure Nothing
+  let fracPart = parseDigitsIn radix . T.unpack <$> fracDigits
+  -- exponent
+  hasExpMarker <- takeExpMarker radix
+  exp <- if hasExpMarker
+    then do
+      expSign <- takeSign
+      expDigits <- takeDigits Base10 ""
+      let (expMag, _) = parseDigitsIn Base10 (T.unpack expDigits)
+          expPart = case expSign of
+            Positive -> expMag
+            Negative -> negate expMag
+      pure $ Just expPart
+    else pure Nothing
+  loc <- Src.consumed <&> (.span)
+  pure $ Number loc
+    sign radix intPart
+    fracPart exp
 
--- |
--- > ┌───────┐
--- > │ dqstr │◀────────────────────────────────────────────────┐
--- > └───────┘                                                 │
--- >     │                                                     │
--- >     │                                                     │
--- >     │                                                     │
--- >     │──▶ [^"`\\] ──▶ [^"`\\]* ─────────────▶ Unescaped ──▶│
--- >     │                                                     │
--- >     │                                                     │
--- >     │──▶ \\ ──┐──▶ [0abefnrt'"`\\]  ───┐                  │
--- >     │         │                        │                  │
--- >     │         │──▶ x[:hex:]{2}      ───│──▶  Escape ─────▶│
--- >     │         │                        │
--- >     │         │──▶ u\{[:hex:]+\}    ───┘
--- >     │
--- >     │
--- >     │                                                  ┌─────┐
--- >     │──▶ ["`] ─────────────────────▶ CloseStr ────────▶│ std │
--- >                                                        └─────┘
+takeSign :: Src.Parse Sign
+takeSign = Src.tryN 1 $ \case
+  "+" -> Right Positive
+  "-" -> Right Negative
+  _ -> Left Positive
 
-dqLex :: Pos -> (Char, Text) -> LexerStep
-dqLex l (c, cs) = case classify c of
-  DQuote -> (Quote l DblQuote, Right (incCol l, cs), StdLex)
-  BtQuote -> (Quote l Backtick, Right (incCol l, cs), StdLex)
-  Punct Backslash -> case cs of
-    c' T.:< cs'
-    -- numeric escapes
-    -- NOTE I've only allowed lowercase \x and \u sequences, with the idea that uppercase escape chars are reserved
-      | c' == 'x' -> escapeX l c c' cs'
-      | c' == 'u'
-      , c''@'{' T.:< cs'' <- cs' ->
-        escapeU l c c' c'' cs''
-    -- NOTE perhaps I'll allow control code escapes? like Haskell "\^C"
-    -- NOTE ascii control code mnemonics would be nice, possibly
-    -- single-letter escape sequence (mostly C escapes)
-      | Just str <- lookup c' stdEscapes ->
-        (StrEscape l str, Right (incCol $ incCol l, cs'), DqLex)
-    -- unrecognized escape
-      | otherwise ->
-        let str = T.pack [c, c']
-            r = advInLine l str
-         in (Illegal l str, Right (r, cs'), DqLex)
-    -- unexpected end of string
-    T.Empty -> (Illegal l (T.singleton c), Left [], StdLex)
-  _ ->
-    let (str, r, rest) = _takeClasses (`notElem` [DQuote, BtQuote, Punct Backslash]) (l, c, cs)
-     in (StdStr l str, Right (r, rest), DqLex)
---- helpers for dqStr ---
-escapeX ::
-      Pos -- ^ left of the backslash
-  -> Char -- ^ the backslash
-  -> Char -- ^ the 'x'
-  -> Text -- ^ the rest of the line
-  -> LexerStep
-escapeX l c c' cs' = case cs' of
-  (c1 T.:< c2 T.:< rest) ->
-    let tok = case parseHex [c1, c2] of
-                Just n -> StrEscape l (chr $ fromInteger n)
-                Nothing -> Illegal l str
-        str = T.pack [c, c', c1, c2]
-        r = advInLine l str
-    in (tok, Right (r, rest), DqLex)
-  (c1 T.:< T.Empty) ->
-    let str = T.pack [c, c', c1]
-      in (Illegal l str, Left [], StdLex)
-  T.Empty ->
-    let str = T.pack [c, c']
-      in (Illegal l str, Left [], StdLex)
-escapeU ::
-      Pos -- ^ left of the backslash
-  -> Char -- ^ the backslash
-  -> Char -- ^ the 'u'
-  -> Char -- ^ the '{'
-  -> Text -- ^ the rest of the line
-  -> LexerStep
-escapeU l c c' c'' cs'' =
-  let escStr = T.pack [c, c', c'']
-      hexL = advInLine l escStr
-      (numStr, rNum, cs''') = _spanBy isHexDigit (hexL, cs'')
-      code_m = case parseHex (T.unpack numStr) of
-        Just n | n <= 0x10FFFF
-               , not (0xD800 <= n && n <= 0xDFFF) -> -- surrogate pairs are not calid codepoints
-          Just $ chr $ fromIntegral n
-        _ -> Nothing
-      (str, r, rest, ok) = case cs''' of
-        c'''@'}' T.:< cs'''' -> (escStr <> numStr T.:> c''', incCol rNum, cs'''', True)
-        _ -> (escStr <> numStr, rNum, cs''', False)
-      tok = case (code_m, ok) of
-        (Just code, True) -> StrEscape l code
-        _ -> Illegal l str
-    in (tok, Right (r, rest), DqLex)
+takeRadix :: Maybe Char -> Src.Parse (Radix, Text)
+takeRadix Nothing = Src.tryN 2 $ \next2 -> case T.toLower next2 of
+  '0' T.:< "b" -> Right (Base2, "")
+  '0' T.:< "o" -> Right (Base8, "")
+  '0' T.:< "x" -> Right (Base16, "")
+  _ -> Left (Base10, "")
+takeRadix (Just firstDigit) = Src.tryN 1 $ \next ->
+  case (firstDigit, T.toLower next) of
+    ('0', "b") -> Right (Base2, "")
+    ('0', "o") -> Right (Base8, "")
+    ('0', "x") -> Right (Base16, "")
+    _ -> Left (Base10, T.singleton firstDigit)
 
--- |
--- >   ┌───────┐
--- >   │ tqstr │◀─────────────────────────────────┐
--- >   └───────┘                                  │
--- >       │                                      │
--- >       │                                      │
--- >       │──▶ [\t ] ──▶ [\t +] ──▶ Lws ────────▶│
--- >       │                                      │
--- >       ▼                                      │
--- >                                              │
--- > is delimiter? ─── no ──▶ .+ ──▶ Unescaped ──▶│
--- >
--- >       │
--- >                                           ┌─────┐
--- >      yes ───────────▶ CloseStr ──────────▶│ std │
--- >                                           └─────┘
--- >
--- > the delimiter will match the /"{3,}[A-Za-z]*/ found when first entering tqstr
+takeDigits :: Radix -> Text -> Src.Parse Text
+takeDigits radix firstDigit = (firstDigit <>) <$> Src.takeWhile (isDigitIn radix)
 
-tqLex :: Text -> Pos -> (Char, Text) -> LexerStep
-tqLex delim l (c, cs) = case classify c of
-  Lws ->
-    let (lws, r, rest) = _takeClasses (==Lws) (l, c, cs)
-     in (Whitespace l lws, Right (r, rest), TqLex delim)
-  _ | str <- c T.:< cs -> case T.stripPrefix delim str of
-    Nothing -> (StdStr l str, Left [], TqLex delim)
-    Just rest ->
-      let r = advInLine l delim
-       in (Quote l (MlQuote delim), Right (r, rest), StdLex)
+takeDecimalPoint :: Src.Parse Bool
+takeDecimalPoint = Src.tryN 1 $ \case
+  "." -> Right True
+  _ -> Left False
+
+takeExpMarker :: Radix -> Src.Parse Bool
+takeExpMarker Base10 = Src.tryN 1 $ \next ->
+  if T.toLower next == "e" then Right True else Left False
+takeExpMarker _ = Src.tryN 1 $ \next ->
+  if T.toLower next == "p" then Right True else Left False
+
+------ Strings ------
+
+--- SQL Strings ---
+
+lexSqString :: Src.Parse Token
+lexSqString = do
+  parts <- takeSqs
+  closeQuote <- Src.tryN 1 $ \case
+    "'" -> Right $ Just SqlQuote
+    _ -> Left Nothing
+  loc <- Src.consumed <&> (.span)
+  pure $ Str loc SqlQuote parts closeQuote
+
+takeSqs :: Src.Parse [StrToken]
+takeSqs = loop []
+  where
+  loop revacc = takeSq >>= \case
+    Just tok -> loop (tok : revacc)
+    Nothing -> pure $ reverse revacc
+
+takeSq :: Src.Parse (Maybe StrToken)
+takeSq = Src.branch
+  [ (takeSqStd, pure . Just)
+  , (takeSqEsc, pure . Just)
+  , (pure undefined, pure . const Nothing)
+  ]
+
+takeSqStd :: Src.Parse StrToken
+takeSqStd = do
+  src <- Src.asSrc $ Src.takeWhile1 (/= '\'')
+  pure $ StdStr src
+
+takeSqEsc :: Src.Parse StrToken
+takeSqEsc = do
+  (loc, _) <- Src.withSpan $ do
+    _ <- Src.sat (== '\'')
+    _ <- Src.sat (== '\'')
+    pure ()
+  pure $ StrEscape loc '\''
+
+--- Double-quoted Strings ---
+
+lexDqString :: QuoteType -> Src.Parse Token
+lexDqString openQuote = do
+  parts <- takeDqs
+  closeQuote <- takeQuote
+  loc <- Src.consumed <&> (.span)
+  pure $ Str loc openQuote parts closeQuote
+
+takeQuote :: Src.Parse (Maybe QuoteType)
+takeQuote = Src.tryN 1 $ \case
+  "\"" -> Right $ Just DblQuote
+  "`" -> Right $ Just Backtick
+  _ -> Left Nothing
+
+takeDqs :: Src.Parse [StrToken]
+takeDqs = loop []
+  where
+  loop revacc = takeDq >>= \case
+    Just tok -> loop (tok : revacc)
+    Nothing -> pure $ reverse revacc
+
+takeDq :: Src.Parse (Maybe StrToken)
+takeDq = Src.branch
+  [ (takeDqStd, pure . Just)
+  , (takeDqEsc, pure . Just)
+  , (takeDqIllegal, pure . Just)
+  , (pure undefined, pure . const Nothing)
+  ]
+
+takeDqStd :: Src.Parse StrToken
+takeDqStd = do
+  src <- Src.asSrc $ Src.takeWhile1 (not . (`T.elem` "\"`\\"))
+  pure $ StdStr src
+
+takeDqEsc :: Src.Parse StrToken
+takeDqEsc = do
+  (loc, tokE) <- Src.withSpan $ stdEsc <|> xEsc <|> uEsc
+  pure $ case tokE of
+    Right code -> StrEscape loc code
+    Left err -> IllStr loc err
+  where
+  stdEsc :: Src.Parse (Either Text Char)
+  stdEsc = do
+    _ <- Src.sat (== '\\')
+    char <- Src.sat (`elem` (fst <$> stdEscapes))
+    pure $ Right . fromJust $ lookup char stdEscapes
+  xEsc :: Src.Parse (Either Text Char)
+  xEsc = do
+    -- backslash + x
+    bs <- Src.sat (== '\\')
+    x <- Src.sat (== 'x')
+    -- two digits
+    aE <- (Right <$> Src.sat isHexDigit) <|> (Left <$> Src.take 1)
+    bE <- (Right <$> Src.sat isHexDigit) <|> (Left <$> Src.take 1)
+    -- parse digits or form error
+    pure $ case (aE, bE) of
+      (Right a, Right b) ->
+        let code = fromJust $ parseHex [a, b]
+         in Right (chr $ fromInteger code)
+      _ ->
+        let a = either id T.singleton aE
+            b = either id T.singleton bE
+        in Left $ T.pack [bs, x] <> a <> b
+  uEsc :: Src.Parse (Either Text Char)
+  uEsc = do
+    -- backslash + u
+    bs <- Src.sat (== '\\')
+    u <- Src.sat (== 'u')
+    -- open bracket, hex digits, close bracket
+    openM <- (Just <$> Src.sat (== '{')) <|> pure Nothing
+    codeE <- (Right <$> Src.takeWhile1 isHexDigit) <|> (Left <$> pure "")
+    closeM <- (Just <$> Src.sat (== '}')) <|> pure Nothing
+    -- parse digits or form error
+    pure $ case (openM, codeE, closeM) of
+      (Just _, Right digits, Just _)
+        | code <- fromJust $ parseHex (T.unpack digits)
+        , 0 <= code && code <= 0x10FFFF
+        , not (0xD000 <= code && code <= 0xDFFF) -- surrogate pairs are invalid codepoints
+        -> Right (chr $ fromInteger code)
+      _ ->
+        let open = maybe "" T.singleton openM
+            digits = either id id codeE
+            close = maybe "" T.singleton closeM
+         in Left $ T.pack [bs, u] <> open <> digits <> close
+
+takeDqIllegal :: Src.Parse StrToken
+takeDqIllegal = do
+  -- TODO perhaps other characters should be illegal, outisde of backslash (and doublequote/backtick, which end the token)
+  (loc, bs) <- Src.withSpan $ T.singleton <$> Src.sat (== '\\')
+  pure $ IllStr loc bs
+
+--- Multi-line Strings ---
+
+lexTqStr :: Src.Parse Token
+lexTqStr = do
+  -- we've already checked for three quotes before
+  -- now take remaining quotes
+  _ <- Src.takeWhile (== '\"')
+  _ <- Src.takeWhile (\c -> 'A' <= c && c <= 'Z'
+                      || 'a' <= c && c <= 'z')
+  MlDelim <$> Src.consumed
+
+lexAfterMlDelim :: SrcText -> Maybe (Token, SrcText)
+lexAfterMlDelim src | Src.null src = Nothing
+lexAfterMlDelim src = case Src.runParse src parser of
+  Just (_, tok, rest) -> Just (tok, rest)
+  Nothing -> internalError "coverage token parsing failed somehow"
+  where
+  parser = do
+    c <- Src.sat (const True)
+    case classify c of
+    -- whitespace
+      Lws -> do
+        _ <- Src.takeWhile (`T.elem` " \t")
+        Whitespace <$> Src.consumed
+      Hash -> do
+        _ <- Src.takeAll
+        Comment <$> Src.consumed
+    -- everything else is illegal
+      _ -> do
+        _ <- Src.takeWhile (not . (`T.elem` " \t#"))
+        Illegal <$> Src.consumed
+
+----------------------------
+------ DELME ------
+----------------------------
+
+------ Terminals/Alphabet ------
 
 data Classify
   = Id0
   | Num
-  | Sgn
+  | Sgn Sign
   -- punctuation
   | Punct PunctuationType
   | SQuote
@@ -413,8 +462,6 @@ data Classify
   -- TODO rn I'm allowing all 'Ill' chars in strings and comments
   -- some codepoints are illegal everywhere, but some that are fine in strings/comments are illegal in standard mode
   deriving (Eq)
-
------- Terminals/Alphabet ------
 
 classify :: Char -> Classify
 -- NOTE I could actually build a lookup table for 0-127 at compiletime, then handle higher codepoints with a fallback
@@ -432,13 +479,13 @@ classify c
   | c == '(' = Punct (Open Round)
   | c == ')' = Punct (Close Round)
   | c == '*' = Id0
-  | c == '+' = Sgn
+  | c == '+' = Sgn Positive
   | c == ',' = Punct Comma
-  | c == '-' = Sgn
-  | c == '.' = Punct Dot
+  | c == '-' = Sgn Negative
+  | c == '.' = Punct $ Dots 1
   | c == '/' = Id0
   | '0' <= c && c <= '9' = Num
-  | c == ':' = Punct Colon
+  | c == ':' = Punct $ Colons 1
   | c == ';' = Punct Semicolon
   | c == '<' = Id0
   | c == '=' = Id0
@@ -478,37 +525,6 @@ stdEscapes =
 
 ------ Helpers ------
 
-_takeClasses :: (Classify -> Bool) -> (Pos, Char, Text) -> (Text, Pos, Text)
-_takeClasses f (l, c, cs) = (ok, r, rest)
-  where
-  ok = c T.:< more
-  r = advInLine l ok
-  (more, rest) = T.span (f . classify) cs
-
-_spanClasses :: (Classify -> Bool) -> (Pos, Text) -> (Text, Pos, Text)
-_spanClasses f (l, cs) = (ok, r, rest)
-  where
-  (ok, rest) = T.span (f . classify) cs
-  r = advInLine l ok
-
-_spanBy :: (Char -> Bool) -> (Pos, Text) -> (Text, Pos, Text)
-_spanBy f (l, cs) = (ok, r, rest)
-  where
-  (ok, rest) = T.span f cs
-  r = advInLine l ok
-
-parseRadix :: Char -> Maybe Radix
-parseRadix c = case toLower c of
-  'b' -> Just Base2
-  'o' -> Just Base8
-  'x' -> Just Base16
-  _ -> Nothing
-
-parseSign :: Char -> Maybe Sign
-parseSign '+' = Just Positive
-parseSign '-' = Just Negative
-parseSign _ = Nothing
-
 isDigitIn :: Radix -> Char -> Bool
 isDigitIn _ '_' = True
 isDigitIn Base2 c = '0' == c || c == '1'
@@ -516,9 +532,9 @@ isDigitIn Base8 c = isOctDigit c
 isDigitIn Base10 c = isDigit c
 isDigitIn Base16 c = isHexDigit c
 
-parseDigitsIn :: Radix -> String -> Maybe (Integer, Int)
-parseDigitsIn _ "" = Nothing
-parseDigitsIn radix str0 = case radix of
+parseDigitsIn :: Radix -> String -> (Integer, Int)
+parseDigitsIn _ "" = (0, 0)
+parseDigitsIn radix str0 = unwrapOrPanic_ $ case radix of
   Base2 -> parseWith 2
   Base8 -> parseWith 8
   Base10 -> parseWith 10
@@ -548,80 +564,6 @@ parseHex str0 = loop 0 str0
     | 'a' <= c && c <= 'f' = loop (acc * 16 + (fromIntegral $ ord c - ord 'a' + 10)) cs
     | 'A' <= c && c <= 'F' = loop (acc * 16 + (fromIntegral $ ord c - ord 'A' + 10)) cs
     | otherwise = Nothing
-
------- Recursion Relation ------
-
-lex :: LexMode -> [Line] -> [Token Span]
-lex mode0 = runLinear . go mode0
-  where
-  go :: LexMode -> [Line] -> Linear (Token Span) LexMode
-  go mode (l:ls) = lexLineFrom mode l >>= \newMode -> go newMode ls
-  go mode [] = Done mode
-
-lexLineFrom :: LexMode -> Line -> Linear (Token Span) LexMode
-lexLineFrom mode line = case (line.content, line.eol) of
-  (c T.:< cs, _) -> loopLexer line $ lex1 line.loc.start (c, cs)
-  (T.Empty, Eof) -> Done recoverMode
-  (T.Empty, ty) ->
-    let tok = Eol (unwrapOrPanic_ $ mkSpan line.loc.end (incLine line.loc.end)) ty
-     in tok `More` Done recoverMode
-  where
-  lex1 = case mode of
-    StdLex -> stdLex
-    NumLex radix -> numLex radix
-    SqLex -> sqLex
-    DqLex -> dqLex
-    TqLex delim -> tqLex delim
-  -- | In case we get to the end of line unexpectedly, we need to reset the mode to standard.
-  recoverMode = case mode of
-    StdLex -> StdLex
-    NumLex _ -> StdLex
-    SqLex -> StdLex
-    DqLex -> StdLex
-    TqLex delim -> TqLex delim
-
--- | The results from lexing a single token from within a line.
--- The algorithm is explained more in 'loopLexer'.
-type LexerStep = (Token Pos, Either [Token Pos] (Pos, Text), LexMode)
-
--- | The lexer algorithm is a loop.
--- We lex a single token with one of 'stdLex, sqLex, dqLex, tqLex'.
--- This token comes with some state data.
--- We emit the token (wrapped into a proper 'Token Span').
--- Then, we inspect the state data to determine the next iteration of the loop (or its termination).
-loopLexer :: Line -> LexerStep -> Linear (Token Span) LexMode
-loopLexer line (tok, rest, newMode) = oneToken `More` moreTokens
-  where
-  r = either (const line.loc.end) fst rest
-  oneToken = tok <&> \l -> unwrapOrPanic_ (mkSpan l r)
-  moreTokens = case rest of
-    -- There may be more text left in the line:
-    -- update line state and continue to lex in the new mode
-    Right (newPos, newContent) -> lexLineFrom newMode Line
-      { content = newContent
-      , loc = unwrapOrPanic_ $ mkSpan newPos line.loc.end
-      , eol = line.eol
-      }
-    -- The line is explicitly drained:
-    -- we'll first emit any extra tokens, then
-    -- create an empty line with the eol (and its position) intact,
-    -- which enables 'lexFromLine' to emit the eol token if needed
-    Left toks -> _extraTokens toks line $
-      lexLineFrom newMode Line
-        { content = T.empty
-        , loc = spanFromPos line.loc.end
-        , eol = line.eol
-        }
-
-_extraTokens :: [Token Pos] -- extra tokens to emit
-  -> Line -- the rest of the line
-  -> Linear (Token Span) LexMode -- token stream after the input tokens, dependent on the Line argument
-  -> Linear (Token Span) LexMode
-_extraTokens [] _ z = z
-_extraTokens [x] line z = tok `More` z
-  where tok = x <&> \l -> unwrapOrPanic_ $ mkSpan l line.loc.end
-_extraTokens (x:xs@(next:_)) line z = tok `More` _extraTokens xs line z
-  where tok = x <&> \l -> unwrapOrPanic_ $ mkSpan l (annotation next)
 
 -------------------------
 ------ Linear Data ------

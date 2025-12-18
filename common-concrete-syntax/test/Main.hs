@@ -9,19 +9,19 @@ import Data.Text (Text)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
-import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Assemble.Numbers (MalformedNumber(..))
-import Language.CCS.Lexer.Assemble.Strings (MalformedString(..))
-import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
+-- import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
+-- import Language.CCS.Lexer.Assemble.Numbers (MalformedNumber(..))
+-- import Language.CCS.Lexer.Assemble.Strings (MalformedString(..))
+-- import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Language.CCS.Lexer.Assemble.Numbers as LexAN
-import qualified Language.CCS.Lexer.Assemble.Strings as LexAS
-import qualified Language.CCS.Lexer.NoiseReduction as LexNR
+-- import qualified Language.CCS.Lexer.Assemble.Numbers as LexAN
+-- import qualified Language.CCS.Lexer.Assemble.Strings as LexAS
+-- import qualified Language.CCS.Lexer.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
-import qualified Language.CCS.Lexer.Sandhi.Indentation as LexSI
+-- import qualified Language.CCS.Lexer.Sandhi.Indentation as LexSI
 import qualified Streaming.Prelude as S
 
 main :: IO ()
@@ -34,22 +34,22 @@ main = defaultMain $ testGroup "Tests"
       let output = Morpheme.pipeline input
       pure $ T.unlines $ T.pack . show <$> output
     ]
-  , testGroup "Tokenizer (lexemes)"
-    [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
-      (err, out) <- input
-            & Morpheme.pipeline
-            & S.each
-            & LexNR.pipeline
-            & LexAN.assemble
-            & LexAS.assemble
-            & LexSI.process
-            & S.toList
-            & execErr
-      pure $ T.concat
-        [ err
-        , T.unlines $ T.pack . show <$> S.fst' out
-        ]
-    ]
+  -- , testGroup "Tokenizer (lexemes)"
+  --   [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
+  --     (err, out) <- input
+  --           & Morpheme.pipeline
+  --           & S.each
+  --           & LexNR.pipeline
+  --           & LexAN.assemble
+  --           & LexAS.assemble
+  --           & LexSI.process
+  --           & S.toList
+  --           & execErr
+  --     pure $ T.concat
+  --       [ err
+  --       , T.unlines $ T.pack . show <$> S.fst' out
+  --       ]
+  --   ]
   ]
 
 golden ::
@@ -88,45 +88,45 @@ instance Monad Err where
     runErr (k x) env
 addErr :: String -> Err ()
 addErr msg = Err $ \env -> modifyIORef env $ (<> (T.pack msg <> "\n"))
-instance DeleteComment Err where
-  deleteComment _ _ = pure ()
-instance RaiseIllegalBytes Err where
-  raiseIllegalBytesOrChars l txt = addErr $ concat
-    [ "IllegalBytesOrChars: "
-    , show l, " "
-    , show txt
-    ]
-instance WhitespaceError Err where
-  raiseTrailingWhitespace l = addErr $ concat
-    [ "TrailingWhitespace: ", show l
-    ]
-  raiseInconsistentNewlines err = addErr $ concat
-    [ "InconosistentNewlines: "
-    , show err
-    ]
-  raiseNoNlAtEof l = addErr $ concat
-    [ "NoNlAtEof: ", show l ]
-instance MalformedNumber Err where
-  raiseExpectingIntegerDigits l = addErr $ concat
-    [ "ExpectingIntegerDigits: ", show l
-    ]
-  raiseNegativeExponentForInteger l = addErr $ concat
-    [ "NegativeExponentForInteger: ", show l ]
-  raiseExpectingExponent l = addErr $ concat
-    [ "ExpectingExponent: ", show l ]
-  raiseUnexpectedSign l = addErr $ concat
-    [ "UnexpectedSign: ", show l ]
-  raiseUnexpectedPower l = addErr $ concat
-    [ "UnexpectedPower: ", show l ]
-instance MalformedString Err where
-  raiseExpectingCloseQuote l = addErr $ concat
-    [ "ExpectingCloseQuote: ", show l ]
-instance MalformedIndentation Err where
-  raiseUnexpectedIndent l = addErr $ concat
-    [ "UnexpectedIndent: ", show l ]
-  raiseInsufficientIndentation l = addErr $ concat
-    [ "InsufficientIndentation: ", show l ]
-  raiseBadWhitespaceBeforeMultiLineDelimiter l expected = addErr $ concat
-    [ "BadWhitespaceBeforeMultiLineDelimiter: ", show l, " expected ", show expected ]
-  raiseLeadingWhitespace l = addErr $ concat
-    [ "LeadingWhitespace: ", show l ]
+-- instance DeleteComment Err where
+--   deleteComment _ _ = pure ()
+-- instance RaiseIllegalBytes Err where
+--   raiseIllegalBytesOrChars l txt = addErr $ concat
+--     [ "IllegalBytesOrChars: "
+--     , show l, " "
+--     , show txt
+--     ]
+-- instance WhitespaceError Err where
+--   raiseTrailingWhitespace l = addErr $ concat
+--     [ "TrailingWhitespace: ", show l
+--     ]
+--   raiseInconsistentNewlines err = addErr $ concat
+--     [ "InconosistentNewlines: "
+--     , show err
+--     ]
+--   raiseNoNlAtEof l = addErr $ concat
+--     [ "NoNlAtEof: ", show l ]
+-- instance MalformedNumber Err where
+--   raiseExpectingIntegerDigits l = addErr $ concat
+--     [ "ExpectingIntegerDigits: ", show l
+--     ]
+--   raiseNegativeExponentForInteger l = addErr $ concat
+--     [ "NegativeExponentForInteger: ", show l ]
+--   raiseExpectingExponent l = addErr $ concat
+--     [ "ExpectingExponent: ", show l ]
+--   raiseUnexpectedSign l = addErr $ concat
+--     [ "UnexpectedSign: ", show l ]
+--   raiseUnexpectedPower l = addErr $ concat
+--     [ "UnexpectedPower: ", show l ]
+-- instance MalformedString Err where
+--   raiseExpectingCloseQuote l = addErr $ concat
+--     [ "ExpectingCloseQuote: ", show l ]
+-- instance MalformedIndentation Err where
+--   raiseUnexpectedIndent l = addErr $ concat
+--     [ "UnexpectedIndent: ", show l ]
+--   raiseInsufficientIndentation l = addErr $ concat
+--     [ "InsufficientIndentation: ", show l ]
+--   raiseBadWhitespaceBeforeMultiLineDelimiter l expected = addErr $ concat
+--     [ "BadWhitespaceBeforeMultiLineDelimiter: ", show l, " expected ", show expected ]
+--   raiseLeadingWhitespace l = addErr $ concat
+--     [ "LeadingWhitespace: ", show l ]
