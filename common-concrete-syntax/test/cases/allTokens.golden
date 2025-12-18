@@ -111,7 +111,7 @@ Comment 29:1--29:8 "# empty"
 Eol 29:8--30:1 LF
 MlDelim 30:1--30:4 "\"\"\""
 Eol 30:4--31:1 LF
-MlDelim 31:1--31:4 "\"\"\""
+MlClose 31:1--31:4
 Eol 31:4--32:1 LF
 Comment 32:1--32:25 "# empty with odd indents"
 Eol 32:25--33:1 LF
@@ -119,15 +119,15 @@ Whitespace 33:1--33:3 "  "
 MlDelim 33:3--33:6 "\"\"\""
 Eol 33:6--34:1 LF
 Whitespace 34:1--34:2 " "
-MlDelim 34:2--34:5 "\"\"\""
+MlClose 34:2--34:5
 Eol 34:5--35:1 LF
 Comment 35:1--35:18 "# with blank line"
 Eol 35:18--36:1 LF
 MlDelim 36:1--36:4 "\"\"\""
 Eol 36:4--37:1 LF
-Whitespace 37:1--37:5 "   \t"
+MlContent 37:1--37:5 "   \t"
 Eol 37:5--38:1 LF
-MlDelim 38:1--38:4 "\"\"\""
+MlClose 38:1--38:4
 Eol 38:4--39:1 LF
 Eol 39:1--40:1 LF
 Comment 40:1--40:11 "# with sql"
@@ -138,12 +138,11 @@ MlContent 42:1--42:9 "SELECT *"
 Eol 42:9--43:1 LF
 MlContent 43:1--43:16 "FROM some_table"
 Eol 43:16--44:1 LF
-Whitespace 44:1--44:3 "  "
-MlContent 44:3--44:19 "JOIN other_table"
+MlContent 44:1--44:19 "  JOIN other_table"
 Eol 44:19--45:1 LF
 MlContent 45:1--45:24 "WHERE some_col <= 65536"
 Eol 45:24--46:1 LF
-MlDelim 46:1--46:4 "\"\"\""
+MlClose 46:1--46:4
 Eol 46:4--47:1 LF
 Eol 47:1--48:1 LF
 Comment 48:1--48:14 "# long quotes"
@@ -158,7 +157,7 @@ MlContent 52:1--52:29 "including a nested ml string"
 Eol 52:29--53:1 LF
 MlContent 53:1--53:4 "\"\"\""
 Eol 53:4--54:1 LF
-MlDelim 54:1--54:6 "\"\"\"\"\""
+MlClose 54:1--54:6
 Eol 54:6--55:1 LF
 Eol 55:1--56:1 LF
 Comment 56:1--56:15 "# named quotes"
@@ -174,7 +173,7 @@ Eol 60:29--61:1 LF
 MlContent 61:1--61:4 "\"\"\""
 Eol 61:4--62:1 LF
 Whitespace 62:1--62:3 "  "
-MlDelim 62:3--62:9 "\"\"\"END"
+MlClose 62:3--62:9
 Eol 62:9--63:1 LF
 Eol 63:1--64:1 LF
 Number 64:1--64:2 Positive Base10 0 Nothing Nothing

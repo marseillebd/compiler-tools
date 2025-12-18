@@ -1,0 +1,102 @@
+Comment 1:1--1:14 "# DON'T LOOK!"
+Eol 1:14--2:1 LF
+Whitespace 2:1--2:3 "  "
+Symbol 2:3--2:12 "badIndent"
+Eol 2:12--3:1 LF
+Whitespace 3:1--3:6 "     "
+Symbol 3:6--3:19 "moreBadIndent"
+Eol 3:19--4:1 LF
+Eol 4:1--5:1 LF
+Number 5:1--5:2 Positive Base10 1 Nothing Nothing
+Eol 5:2--6:1 LF
+Number 6:1--6:3 Negative Base10 4 Nothing Nothing
+Whitespace 6:3--6:4 " "
+Number 6:4--6:6 Positive Base10 3 Nothing Nothing
+Eol 6:6--7:1 LF
+Number 7:1--7:5 Positive Base10 1 (Just (2,2)) Nothing
+Whitespace 7:5--7:7 "  "
+Eol 7:7--8:1 LF
+Number 8:1--8:6 Positive Base2 1 Nothing (Just 8)
+Eol 8:6--9:1 LF
+Number 9:1--9:6 Positive Base16 0 (Just (10,1)) Nothing
+Eol 9:6--10:1 LF
+Number 10:1--10:7 Positive Base10 4 (Just (20,2)) (Just 6)
+Eol 10:7--11:1 LF
+Number 11:1--11:8 Positive Base10 4 (Just (20,2)) (Just 6)
+Eol 11:8--12:1 LF
+Number 12:1--12:8 Positive Base10 4 (Just (20,2)) (Just (-6))
+Eol 12:8--13:1 LF
+Number 13:1--13:10 Negative Base16 1 (Just (0,1)) (Just 0)
+Eol 13:10--14:1 LF
+Eol 14:1--15:1 LF
+Number 15:1--15:9 Negative Base16 1 (Just (225,3)) Nothing
+Eol 15:9--16:1 LF
+Number 16:1--16:7 Negative Base2 1 (Just (0,1)) Nothing
+Symbol 16:7--16:9 "e1"
+Eol 16:9--17:1 LF
+Eol 17:1--18:1 LF
+Str 18:1--18:16 SqlQuote [StdStr 18:2--18:8 "wouldn",StrEscape 18:8--18:10 '\'',StdStr 18:10--18:11 "t",StrEscape 18:11--18:13 '\'',StdStr 18:13--18:15 "ve"] (Just SqlQuote)
+Eol 18:16--19:1 LF
+Str 19:1--19:16 DblQuote [StdStr 19:2--19:15 "Hello, world!"] (Just DblQuote)
+Eol 19:16--20:1 LF
+Str 20:1--20:10 DblQuote [StdStr 20:2--20:9 "Hello, "] (Just Backtick)
+Symbol 20:10--20:14 "name"
+Str 20:14--20:17 Backtick [StdStr 20:15--20:16 "!"] (Just DblQuote)
+Eol 20:17--21:1 LF
+Str 21:1--21:3 DblQuote [] (Just Backtick)
+Symbol 21:3--21:11 "greeting"
+Str 21:11--21:15 Backtick [StdStr 21:12--21:14 ", "] (Just Backtick)
+Symbol 21:15--21:19 "name"
+Str 21:19--21:22 Backtick [StdStr 21:20--21:21 "!"] (Just DblQuote)
+Eol 21:22--22:1 LF
+Eol 22:1--23:1 LF
+MlDelim 23:1--23:7 "\"\"\"END"
+Eol 23:7--24:1 LF
+MlContent 24:1--24:5 "asdf"
+Eol 24:5--25:1 LF
+MlContent 25:1--25:9 "  qwerty"
+Eol 25:9--26:1 LF
+MlContent 26:1--26:1 ""
+Eol 26:1--27:1 LF
+MlClose 27:1--27:7
+Whitespace 27:7--27:8 " "
+Illegal 27:8--27:11 "end"
+Eol 27:11--28:1 LF
+Eol 28:1--29:1 LF
+Symbol 29:1--29:4 "def"
+Whitespace 29:4--29:5 " "
+Symbol 29:5--29:8 "foo"
+Punctuation 29:8--29:9 (Open Round)
+Punctuation 29:9--29:10 (Close Round)
+Punctuation 29:10--29:11 (Colons 1)
+Eol 29:11--30:1 LF
+Whitespace 30:1--30:3 "  "
+Symbol 30:3--30:7 "pass"
+Eol 30:7--31:1 LF
+Whitespace 31:1--31:5 "    "
+Symbol 31:5--31:10 "print"
+Whitespace 31:10--31:11 " "
+MlDelim 31:11--31:14 "\"\"\""
+Eol 31:14--32:1 LF
+MlContent 32:1--32:10 "    hello"
+Eol 32:10--33:1 LF
+MlContent 33:1--33:12 "      world"
+Eol 33:12--34:1 LF
+Whitespace 34:1--34:5 "    "
+MlClose 34:5--34:8
+Eol 34:8--35:1 LF
+Eol 35:1--36:1 LF
+Symbol 36:1--36:10 "something"
+Eol 36:10--37:1 LF
+Whitespace 37:1--37:3 "  "
+MlDelim 37:3--37:15 "\"\"\"BADtoofew"
+Eol 37:15--38:1 LF
+Whitespace 38:1--38:2 " "
+MlClose 38:2--38:14
+Eol 38:14--39:1 LF
+Whitespace 39:1--39:3 "  "
+MlDelim 39:3--39:16 "\"\"\"BADtoomany"
+Eol 39:16--40:1 LF
+Whitespace 40:1--40:6 "     "
+MlClose 40:6--40:19
+Eol 40:19--41:1 LF

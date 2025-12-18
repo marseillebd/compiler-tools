@@ -29,7 +29,7 @@ library
       -- Language.CCS.Lexer.Assemble.Strings
       Language.CCS.Lexer.Line
       Language.CCS.Lexer.Morpheme
-      -- Language.CCS.Lexer.NoiseReduction
+      Language.CCS.Lexer.NoiseReduction
       Language.CCS.Lexer.Pipeline
       -- Language.CCS.Lexer.Sandhi.Indentation
     -- other-modules:

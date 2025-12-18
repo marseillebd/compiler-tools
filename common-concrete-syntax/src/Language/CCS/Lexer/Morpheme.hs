@@ -32,8 +32,8 @@ import Language.Text (SrcText)
     (Str Span QuoteType (* StrToken) (? QuoteType))
     (MlDelim SrcText)
     (MlContent SrcText)
+    (MlClose Span)
     (Punctuation Span PunctuationType)
-    (Quote Span QuoteType)
     (Eol Span EolType)
     (Whitespace SrcText)
     (Comment SrcText)
@@ -59,8 +59,8 @@ annotation (Number a _ _ _ _ _) = a
 annotation (Str a _ _ _) = a
 annotation (MlDelim a) = a.span
 annotation (MlContent a) = a.span
+annotation (MlClose a) = a
 annotation (Punctuation a _) = a
-annotation (Quote a _) = a
 annotation (Eol a _) = a
 annotation (Whitespace a) = a.span
 annotation (Comment a) = a.span

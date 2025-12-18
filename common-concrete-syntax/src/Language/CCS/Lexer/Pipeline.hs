@@ -106,7 +106,7 @@ data LexMode
   | TqLex Text
 
 lexLine :: LexMode -> SrcText -> ([Token], LexMode)
-lexLine StdLex = loop []
+lexLine StdLex src0 = loop [] src0
   where
   loop revacc src = case lexStd src of
     Just (tok@(MlDelim delim), rest) -> drain delim.text (tok : revacc) rest
@@ -115,15 +115,33 @@ lexLine StdLex = loop []
   drain delim revacc src = case lexAfterMlDelim src of
     Just (tok, rest) -> drain delim (tok : revacc) rest
     Nothing -> (reverse revacc, TqLex delim)
-lexLine (TqLex delim) = loop []
+lexLine (TqLex delim) src0 = case Src.runParse src0 lexDelim of
+  Just (_, revacc, rest) -> drain revacc rest
+  Nothing -> ([MlContent src0], TqLex delim)
   where
-  loop revacc src = case lexTq delim src of
-    Just (tok@(MlDelim _), rest) -> drain (tok : revacc) rest
-    Just (tok, rest) -> loop (tok : revacc) rest
-    Nothing -> (reverse revacc, TqLex delim)
+  lexDelim = do
+    ws <- Src.asSrc $ Src.takeWhile (`T.elem` " \t")
+    delim' <- Src.asSrc $ Src.takePrefix delim
+    pure $ MlClose delim'.span : (if Src.null ws then [] else [Whitespace ws])
   drain revacc src = case lexAfterMlDelim src of
     Just (tok, rest) -> drain (tok : revacc) rest
     Nothing -> (reverse revacc, StdLex)
+
+lexTq :: Text -> SrcText -> Maybe (Token, SrcText)
+lexTq _ src | Src.null src = Nothing
+lexTq delim src = case Src.runParse src parser of
+  Just (_, tok, rest) -> Just (tok, rest)
+  Nothing -> internalError "coverage token parsing failed somehow"
+  where
+  parser
+     =  do
+        _ <- Src.takeWhile (`T.elem` " \t")
+        _ <- Src.takePrefix delim
+        delim' <- Src.consumed
+        pure $ MlDelim delim'
+    <|> do
+        _ <- Src.takeAll
+        MlContent <$> Src.consumed
 
 lexStd :: SrcText -> Maybe (Token, SrcText)
 lexStd src | Src.null src = Nothing
@@ -180,24 +198,6 @@ lexStd src = case Src.runParse src parser of
       Ill -> do
         _ <- Src.takeWhile ((== Ill) . classify)
         Illegal <$> Src.consumed
-
-lexTq :: Text -> SrcText -> Maybe (Token, SrcText)
-lexTq _ src | Src.null src = Nothing
-lexTq delim src = case Src.runParse src parser of
-  Just (_, tok, rest) -> Just (tok, rest)
-  Nothing -> internalError "coverage token parsing failed somehow"
-  where
-  parser
-     =  do
-        _ <- Src.takeWhile1 (`T.elem` " \t")
-        Whitespace <$> Src.consumed
-    <|> do
-        _ <- Src.takePrefix delim
-        delim' <- Src.consumed
-        pure $ MlDelim delim'
-    <|> do
-        _ <- Src.takeAll
-        MlContent <$> Src.consumed
 
 ------ Symbols ------
 

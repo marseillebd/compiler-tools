@@ -9,7 +9,7 @@ import Data.Text (Text)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
--- import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
+import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
 -- import Language.CCS.Lexer.Assemble.Numbers (MalformedNumber(..))
 -- import Language.CCS.Lexer.Assemble.Strings (MalformedString(..))
 -- import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
@@ -19,7 +19,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 -- import qualified Language.CCS.Lexer.Assemble.Numbers as LexAN
 -- import qualified Language.CCS.Lexer.Assemble.Strings as LexAS
--- import qualified Language.CCS.Lexer.NoiseReduction as LexNR
+import qualified Language.CCS.Lexer.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
 -- import qualified Language.CCS.Lexer.Sandhi.Indentation as LexSI
 import qualified Streaming.Prelude as S
@@ -30,26 +30,29 @@ main = defaultMain $ testGroup "Tests"
     [ golden "test all legal raw tokens at once" "allTokens" $ \input -> do
       let output = Morpheme.pipeline input
       pure $ T.unlines $ T.pack . show <$> output
+    , golden "smoke test all lexemes as raw tokens" "allRawLexemes" $ \input -> do
+      let output = Morpheme.pipeline input
+      pure $ T.unlines $ T.pack . show <$> output
     , golden "empty input file has no tokens" "noTokens" $ \input -> do
       let output = Morpheme.pipeline input
       pure $ T.unlines $ T.pack . show <$> output
     ]
-  -- , testGroup "Tokenizer (lexemes)"
-  --   [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
-  --     (err, out) <- input
-  --           & Morpheme.pipeline
-  --           & S.each
-  --           & LexNR.pipeline
-  --           & LexAN.assemble
-  --           & LexAS.assemble
-  --           & LexSI.process
-  --           & S.toList
-  --           & execErr
-  --     pure $ T.concat
-  --       [ err
-  --       , T.unlines $ T.pack . show <$> S.fst' out
-  --       ]
-  --   ]
+  , testGroup "Tokenizer (lexemes)"
+    [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
+      (err, out) <- input
+            & Morpheme.pipeline
+            & S.each
+            & LexNR.pipeline
+            -- & LexAN.assemble
+            -- & LexAS.assemble
+            -- & LexSI.process
+            & S.toList
+            & execErr
+      pure $ T.concat
+        [ err
+        , T.unlines $ T.pack . show <$> S.fst' out
+        ]
+    ]
   ]
 
 golden ::
@@ -88,24 +91,20 @@ instance Monad Err where
     runErr (k x) env
 addErr :: String -> Err ()
 addErr msg = Err $ \env -> modifyIORef env $ (<> (T.pack msg <> "\n"))
--- instance DeleteComment Err where
---   deleteComment _ _ = pure ()
--- instance RaiseIllegalBytes Err where
---   raiseIllegalBytesOrChars l txt = addErr $ concat
---     [ "IllegalBytesOrChars: "
---     , show l, " "
---     , show txt
---     ]
--- instance WhitespaceError Err where
---   raiseTrailingWhitespace l = addErr $ concat
---     [ "TrailingWhitespace: ", show l
---     ]
---   raiseInconsistentNewlines err = addErr $ concat
---     [ "InconosistentNewlines: "
---     , show err
---     ]
---   raiseNoNlAtEof l = addErr $ concat
---     [ "NoNlAtEof: ", show l ]
+instance DeleteComment Err where
+  deleteComment _ = pure ()
+instance RaiseIllegalBytes Err where
+  raiseIllegalBytesOrChars txt = addErr $ concat
+    [ "IllegalBytesOrChars: ", show txt ]
+instance WhitespaceError Err where
+  raiseTrailingWhitespace l = addErr $ concat
+    [ "TrailingWhitespace: ", show l ]
+  raiseInconsistentNewlines err = addErr $ concat
+    [ "InconosistentNewlines: "
+    , show err
+    ]
+  raiseNoNlAtEof l = addErr $ concat
+    [ "NoNlAtEof: ", show l ]
 -- instance MalformedNumber Err where
 --   raiseExpectingIntegerDigits l = addErr $ concat
 --     [ "ExpectingIntegerDigits: ", show l
