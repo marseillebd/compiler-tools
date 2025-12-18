@@ -296,6 +296,12 @@ Data Types
 
 TODO explain/adjust what I've described here
 
+The sign is kept for floating point literals because IEE754 says negative zero is a thing.
+It is kept for integer literals because a) they could be silently converted to floating point by downstream, and b) we may for some reason want a signed zero for simulating sign-magnitude arithmetic or just some obscure math concept like the line with two origins; I suspect most downstreams will ignore the sign for zero magnitude
+The radix is kept for floating point literals because it may be an important part of indicating precision: eg scientific notation encodes uncertainty in how many (or rather, how few) significant figures are present, for which we must know how big a jump each digit is.
+Note that this also means we cannot throw away trailing zeros by compressing floats that are multiples of the radix: `1.00e4 /= 1e2` because the significant figures are different, and this is represented with `Flo(100, base10, 4) /= Flo(1, base10, 2)`.
+Of course, specific downstream types may _later_ performa set quotient operation.
+
 ```
 CST ::= Atom
      |  Enclose Encloser CST
@@ -304,9 +310,9 @@ CST ::= Atom
      |  Template Text (CST Text)+
 
 Atom ::= Symbol Text // but the text has requirements: matches /[:id:]+|:{2,3}|.{2,3}/ - /[+-]?\d.*/
-      |  IntegerLiteral ℤ
-      |  FloatingLiteral ℤ ℤ // a * 2^b
-      |  DecimalFloatingLiteral ℤ ℤ // a * 10^b
+      |  IntegerLiteral {+,-} ℕ
+      |  FloatingLiteral {+,-} ℕ {2,8,16} ℤ // ±a * r^b
+      |  DecimalFloatingLiteral {+,-} ℕ ℤ // ±a * 10^b
       |  StringLiteral Text
       |  MultilineLiteral Text*
 

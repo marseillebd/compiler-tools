@@ -5,14 +5,16 @@ module Language.CCS.Lexer.Assemble.Strings
   , StringType(..)
   , annotation
   , assemble
+  , MalformedNumber(..)
   , MalformedString(..)
   ) where
 
-import Prelude hiding (lines)
+import Prelude hiding (lines, exp)
 
+import Control.Monad (when)
 import Data.Text (Text)
 import Language.CCS.Error (internalError, unwrapOrPanic_)
-import Language.CCS.Lexer.Morpheme (QuoteType(..))
+import Language.CCS.Lexer.Morpheme (QuoteType(..), Sign, Radix(..))
 import Language.Location (Pos, Span, spanFromPos, mkSpan)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
@@ -29,6 +31,10 @@ import qualified Streaming.Prelude as S
 (CCS from L0:CCS
   (- StrToken)
   (* Token
+    (- Number)
+    (+ IntegerLiteral Span IntLit)
+    (+ FloatingLiteral Span FloLit)
+
     (- Str)
     (+ StringLiteral Span StrLit)
     (- MlDelim)
@@ -38,6 +44,22 @@ import qualified Streaming.Prelude as S
   )
 )
 |]
+
+-- FIXME I can also handle dot/colon sequences here also
+
+data IntLit = IntLit
+  { signI :: Sign
+  , magI :: Integer -- NOTE should be Natural
+  }
+  deriving (Eq, Show)
+
+data FloLit
+  = FloLit
+    { signF :: Sign
+    , magF :: Integer -- NOTE should be Natural
+    , expF :: (Radix, Integer)
+    }
+  deriving (Eq, Show)
 
 data StrLit = StrLit
   { strTy :: StringType
@@ -56,10 +78,11 @@ deriving instance Show Token
 
 annotation :: Token -> Span
 annotation (Symbol a) = a.span
-annotation (Number a _ _ _ _ _) = a
 annotation (Punctuation a _) = a
 annotation (Whitespace a) = a.span
 annotation (Eol a _) = a
+annotation (IntegerLiteral a _) = a
+annotation (FloatingLiteral a _) = a
 annotation (StringLiteral a _) = a
 annotation (MultilineLiteral a _ _) = a
 
@@ -67,17 +90,22 @@ $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
-xlate :: MalformedString m => L0.Token -> m Token
+xlate :: (MalformedString m, MalformedNumber m) => L0.Token -> m Token
 xlate = descendToken Xlate
   { onToken = const Nothing
+  , onTokenNumber = number
   , onTokenStr = stdStr
   , onTokenMlDelim = \_ -> internalError "attempt to translate MlDelim token to next lexing stage"
   , onTokenMlContent = \_ -> internalError "attempt to translate MlContent token to next lexing stage"
   , onTokenMlClose = \_ -> internalError "attempt to translate MlClose token to next lexing stage"
   }
 
+------------------
+------ Main ------
+------------------
+
 assemble ::
-  ( MalformedString m )
+  ( MalformedNumber m, MalformedString m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 assemble inp0 = S.effect $ S.next inp0 >>= \case
@@ -97,6 +125,56 @@ assemble inp0 = S.effect $ S.next inp0 >>= \case
       yield other'
       assemble rest
   Left r -> pure $ pure r
+
+---------------------
+------ Numbers ------
+---------------------
+
+number
+  :: MalformedNumber m
+  => Span
+  -> Sign
+  -> Radix
+  -> Integer
+  -> Maybe (Integer, Int)
+  -> Maybe Integer
+  -> m Token
+-- integer literal
+number loc sign _ i Nothing Nothing = pure $
+  IntegerLiteral loc $ IntLit
+    { signI = sign
+    , magI = i
+    }
+-- floating point literal without exponent
+number loc sign radix whole (Just (frac, len)) Nothing = do
+  when (len == 0) $
+    raiseExpectingFractionalDigits loc
+  pure $ FloatingLiteral loc $ FloLit
+    { signF = sign
+    , magF = whole * (radix.base ^ len) + frac
+    , expF = (radix, negate $ fromIntegral len)
+    }
+-- floating point literal with exponent
+number loc sign radix whole (Just (frac, len)) (Just exp) = do
+  when (len == 0) $
+    raiseExpectingFractionalDigits loc
+  pure $ FloatingLiteral loc $ FloLit
+    { signF = sign
+    , magF = whole * (radix.base ^ len) + frac
+    , expF = (radix, exp - fromIntegral len)
+    }
+-- BAD: integer with exponent
+number loc sign radix whole Nothing (Just exp) = do
+  raiseUnexpectedExponent loc
+  pure $ FloatingLiteral loc $ FloLit
+    { signF = sign
+    , magF = whole
+    , expF = (radix, exp)
+    }
+
+----------------------------
+------ Inline Strings ------
+----------------------------
 
 stdStr :: MalformedString m
   => Span
@@ -123,6 +201,10 @@ mkStrType DblQuote _ = StrLiteral
 mkStrType Backtick (Just Backtick) = MidTemplate
 mkStrType Backtick _ = CloseTemplate
 mkStrType (MlQuote _) _ = internalError "mkStrType called on an MlQuote"
+
+-------------------------------
+------ Multiline Strings ------
+-------------------------------
 
 data MlSt = MlSt
   { mlL :: Pos -- ^ position to the left of the open quotes
@@ -179,6 +261,15 @@ mlMode st inp0 = S.next inp0 >>= \case
         lastIndent = Src.fromPos st.mlR ""
         spn = unwrapOrPanic_ $ mkSpan st.mlL st.mlR
     pure (tok, pure r)
+
+--------------------
+------ Errors ------
+--------------------
+
+class Monad m => MalformedNumber m where
+  raiseExpectingFractionalDigits :: Span -> m ()
+  raiseExpectingExponent :: Span -> m ()
+  raiseUnexpectedExponent :: Span -> m ()
 
 class Monad m => MalformedString m where
   raiseExpectingCloseQuote :: Span -> m ()

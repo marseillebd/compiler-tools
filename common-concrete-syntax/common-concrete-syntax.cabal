@@ -25,7 +25,6 @@ library
     import:           common
     exposed-modules:
       Language.CCS.Error
-      -- Language.CCS.Lexer.Assemble.Numbers
       Language.CCS.Lexer.Assemble.Strings
       Language.CCS.Lexer.Line
       Language.CCS.Lexer.Morpheme
