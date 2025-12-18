@@ -38,3 +38,11 @@ something
  """BADtoofew
   """BADtoomany
      """BADtoomany
+
+g . f
+g .. f
+g ... f
+f: g
+f :: Type
+::: triple
+.... ::::

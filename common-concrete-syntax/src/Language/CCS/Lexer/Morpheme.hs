@@ -46,12 +46,24 @@ import Language.Text (SrcText)
     (IllStr SrcText)
   )
 
+  (PunctuationType
+    (Open BracketType)
+    (Close BracketType)
+    (Dots Int)
+    (Colons Int)
+    (Comma)
+    (Semicolon)
+    (Backslash)
+  )
+
 )
 |]
 -- TODO the argument for Symbol should enforce the invariants on how Symbols may be spelled
 
 deriving instance Show Token
 deriving instance Show StrToken
+deriving instance Show PunctuationType
+deriving instance Eq PunctuationType
 
 annotation :: Token -> Span
 annotation (Symbol a) = a.span
@@ -66,12 +78,6 @@ annotation (Whitespace a) = a.span
 annotation (Comment a) = a.span
 annotation (Illegal a) = a.span
 
-data PunctuationType
-  = Open BracketType
-  | Close BracketType
-  | Comma | Dots Int | Colons Int | Semicolon
-  | Backslash
-  deriving (Eq, Show)
 data BracketType = Round | Square | Curly
   deriving (Eq, Show)
 

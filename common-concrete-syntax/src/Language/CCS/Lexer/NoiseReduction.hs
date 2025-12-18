@@ -2,6 +2,7 @@ module Language.CCS.Lexer.NoiseReduction
   ( CCS(..)
   , Token(..)
   , StrToken(..)
+  , PunctuationType(..)
   , annotation
   , pipeline
   , DeleteComment(..)
@@ -37,6 +38,8 @@ import qualified Streaming.Prelude as S
 
 deriving instance Show Token
 deriving instance Show StrToken
+deriving instance Show PunctuationType
+deriving instance Eq PunctuationType
 
 annotation :: Token -> Span
 annotation (Symbol a) = a.span
@@ -60,6 +63,7 @@ xlate = Xlate
         pure $ Str l open body' close
       _ -> Nothing
   , onStrToken = const Nothing
+  , onPunctuationType = const Nothing
   , onTokenComment = \_ -> internalError "attempt to translate Comment token to next lexing stage"
   , onTokenIllegal = \_ -> internalError "attempt to translate Illegal token to next lexing stage"
   , onStrTokenIllStr = \_ -> internalError "attempt to translate IllStr token to next lexing stage"

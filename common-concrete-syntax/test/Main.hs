@@ -10,7 +10,7 @@ import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Assemble.Strings (MalformedNumber(..), MalformedString(..))
+import Language.CCS.Lexer.Assemble.Strings (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
 -- import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
 
 import qualified Data.ByteString.Lazy as LBS
@@ -103,6 +103,11 @@ instance WhitespaceError Err where
     ]
   raiseNoNlAtEof l = addErr $ concat
     [ "NoNlAtEof: ", show l ]
+instance MalformedPunctuation Err where
+  raiseTooManyDots l = addErr $ concat
+    [ "TooManyDots: ", show l ]
+  raiseTooManyColons l = addErr $ concat
+    [ "TooManyColons: ", show l ]
 instance MalformedNumber Err where
   raiseExpectingFractionalDigits l = addErr $ concat
     [ "ExpectingFractionalDigits: ", show l

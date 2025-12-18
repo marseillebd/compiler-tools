@@ -12,7 +12,6 @@ import Control.Applicative ((<|>))
 import Data.Char (chr, ord, isOctDigit, isDigit, isHexDigit, toLower)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.Maybe (fromJust)
 import Data.Text (Text)
 import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
 import Language.CCS.Lexer.Morpheme (PunctuationType(..), BracketType(..))
@@ -361,7 +360,7 @@ takeDqEsc = do
   stdEsc = do
     _ <- Src.sat (== '\\')
     char <- Src.sat (`elem` (fst <$> stdEscapes))
-    pure $ Right . fromJust $ lookup char stdEscapes
+    pure $ Right . unwrapOrPanic_ $ lookup char stdEscapes
   xEsc :: Src.Parse (Either Text Char)
   xEsc = do
     -- backslash + x
@@ -373,7 +372,7 @@ takeDqEsc = do
     -- parse digits or form error
     pure $ case (aE, bE) of
       (Right a, Right b) ->
-        let code = fromJust $ parseHex [a, b]
+        let code = unwrapOrPanic_ $ parseHex [a, b]
          in Right (chr $ fromInteger code)
       _ ->
         let a = either id T.singleton aE
@@ -391,7 +390,7 @@ takeDqEsc = do
     -- parse digits or form error
     pure $ case (openM, codeE, closeM) of
       (Just _, Right digits, Just _)
-        | code <- fromJust $ parseHex (T.unpack digits)
+        | code <- unwrapOrPanic_ $ parseHex (T.unpack digits)
         , 0 <= code && code <= 0x10FFFF
         , not (0xD000 <= code && code <= 0xDFFF) -- surrogate pairs are invalid codepoints
         -> Right (chr $ fromInteger code)

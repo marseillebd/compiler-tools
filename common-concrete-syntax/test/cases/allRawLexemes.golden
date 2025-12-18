@@ -100,3 +100,41 @@ Eol 39:16--40:1 LF
 Whitespace 40:1--40:6 "     "
 MlClose 40:6--40:19
 Eol 40:19--41:1 LF
+Eol 41:1--42:1 LF
+Symbol 42:1--42:2 "g"
+Whitespace 42:2--42:3 " "
+Punctuation 42:3--42:4 (Dots 1)
+Whitespace 42:4--42:5 " "
+Symbol 42:5--42:6 "f"
+Eol 42:6--43:1 LF
+Symbol 43:1--43:2 "g"
+Whitespace 43:2--43:3 " "
+Punctuation 43:3--43:5 (Dots 2)
+Whitespace 43:5--43:6 " "
+Symbol 43:6--43:7 "f"
+Eol 43:7--44:1 LF
+Symbol 44:1--44:2 "g"
+Whitespace 44:2--44:3 " "
+Punctuation 44:3--44:6 (Dots 3)
+Whitespace 44:6--44:7 " "
+Symbol 44:7--44:8 "f"
+Eol 44:8--45:1 LF
+Symbol 45:1--45:2 "f"
+Punctuation 45:2--45:3 (Colons 1)
+Whitespace 45:3--45:4 " "
+Symbol 45:4--45:5 "g"
+Eol 45:5--46:1 LF
+Symbol 46:1--46:2 "f"
+Whitespace 46:2--46:3 " "
+Punctuation 46:3--46:5 (Colons 2)
+Whitespace 46:5--46:6 " "
+Symbol 46:6--46:10 "Type"
+Eol 46:10--47:1 LF
+Punctuation 47:1--47:4 (Colons 3)
+Whitespace 47:4--47:5 " "
+Symbol 47:5--47:11 "triple"
+Eol 47:11--48:1 LF
+Punctuation 48:1--48:5 (Dots 4)
+Whitespace 48:5--48:6 " "
+Punctuation 48:6--48:10 (Colons 4)
+Eol 48:10--49:1 LF

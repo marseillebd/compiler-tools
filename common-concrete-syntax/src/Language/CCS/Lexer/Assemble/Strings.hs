@@ -5,6 +5,7 @@ module Language.CCS.Lexer.Assemble.Strings
   , StringType(..)
   , annotation
   , assemble
+  , MalformedPunctuation(..)
   , MalformedNumber(..)
   , MalformedString(..)
   ) where
@@ -29,7 +30,6 @@ import qualified Streaming.Prelude as S
 
 [deflang|
 (CCS from L0:CCS
-  (- StrToken)
   (* Token
     (- Number)
     (+ IntegerLiteral Span IntLit)
@@ -41,6 +41,15 @@ import qualified Streaming.Prelude as S
     (- MlContent)
     (- MlClose)
     (+ MultilineLiteral Span (* SrcText) SrcText)
+  )
+
+  (- StrToken)
+
+  (* PunctuationType
+    (- Dots)
+    (+ Dot) (+ Dots2) (+ Dots3)
+    (- Colons)
+    (+ Colon) (+ Colons2) (+ Colons3)
   )
 )
 |]
@@ -75,6 +84,7 @@ data StringType
   deriving (Show)
 
 deriving instance Show Token
+deriving instance Show PunctuationType
 
 annotation :: Token -> Span
 annotation (Symbol a) = a.span
@@ -90,14 +100,21 @@ $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
-xlate :: (MalformedString m, MalformedNumber m) => L0.Token -> m Token
+xlate :: (MalformedPunctuation m, MalformedNumber m, MalformedString m)
+  => L0.Token -> m Token
 xlate = descendToken Xlate
-  { onToken = const Nothing
-  , onTokenNumber = number
+  { onToken = \case
+    L0.Punctuation loc (L0.Dots n) -> Just $ longDots loc n
+    L0.Punctuation loc (L0.Colons n) -> Just $ longColons loc n
+    _ -> Nothing
   , onTokenStr = stdStr
+  , onPunctuationType = const Nothing
+  , onTokenNumber = number
   , onTokenMlDelim = \_ -> internalError "attempt to translate MlDelim token to next lexing stage"
   , onTokenMlContent = \_ -> internalError "attempt to translate MlContent token to next lexing stage"
   , onTokenMlClose = \_ -> internalError "attempt to translate MlClose token to next lexing stage"
+  , onPunctuationTypeDots = \_ -> internalError "attempt to translate Dots token to next lexing stage"
+  , onPunctuationTypeColons = \_ -> internalError "attempt to translate Colons token to next lexing stage"
   }
 
 ------------------
@@ -105,7 +122,7 @@ xlate = descendToken Xlate
 ------------------
 
 assemble ::
-  ( MalformedNumber m, MalformedString m )
+  ( MalformedPunctuation m, MalformedNumber m, MalformedString m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 assemble inp0 = S.effect $ S.next inp0 >>= \case
@@ -125,6 +142,34 @@ assemble inp0 = S.effect $ S.next inp0 >>= \case
       yield other'
       assemble rest
   Left r -> pure $ pure r
+
+-------------------------
+------ Punctuation ------
+-------------------------
+
+longDots
+  :: MalformedPunctuation m
+  => Span
+  -> Int
+  -> m Token
+longDots loc 1 = pure $ Punctuation loc Dot
+longDots loc 2 = pure $ Punctuation loc Dots2
+longDots loc 3 = pure $ Punctuation loc Dots3
+longDots loc _ = do
+  raiseTooManyDots loc
+  pure $ Punctuation loc Dots3
+
+longColons
+  :: MalformedPunctuation m
+  => Span
+  -> Int
+  -> m Token
+longColons loc 1 = pure $ Punctuation loc Colon
+longColons loc 2 = pure $ Punctuation loc Colons2
+longColons loc 3 = pure $ Punctuation loc Colons3
+longColons loc _ = do
+  raiseTooManyColons loc
+  pure $ Punctuation loc Colons3
 
 ---------------------
 ------ Numbers ------
@@ -265,6 +310,10 @@ mlMode st inp0 = S.next inp0 >>= \case
 --------------------
 ------ Errors ------
 --------------------
+
+class Monad m => MalformedPunctuation m where
+  raiseTooManyDots :: Span -> m ()
+  raiseTooManyColons :: Span -> m ()
 
 class Monad m => MalformedNumber m where
   raiseExpectingFractionalDigits :: Span -> m ()
