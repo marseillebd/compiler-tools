@@ -43,7 +43,7 @@ import Language.Text (SrcText)
   (StrToken
     (StdStr SrcText)
     (StrEscape Span Char)
-    (IllStr Span Text)
+    (IllStr SrcText)
   )
 
 )

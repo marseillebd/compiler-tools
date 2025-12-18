@@ -3,39 +3,38 @@ module Language.CCS.Lexer.Assemble.Strings
   , Token(..)
   , StrLit(..)
   , StringType(..)
-  , MlLine(..)
   , annotation
   , assemble
   , MalformedString(..)
   ) where
+
+import Prelude hiding (lines)
 
 import Data.Text (Text)
 import Language.CCS.Error (internalError, unwrapOrPanic_)
 import Language.CCS.Lexer.Morpheme (QuoteType(..))
 import Language.Location (Pos, Span, spanFromPos, mkSpan)
 import Language.Nanopass (deflang, defpass)
+import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Data.Text as T
-import qualified Language.CCS.Lexer.Assemble.Numbers as L0
+import qualified Language.CCS.Lexer.NoiseReduction as L0
+import qualified Language.Text as Src
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
 [deflang|
-((CCS loc) from L0:CCS
+(CCS from L0:CCS
+  (- StrToken)
   (* Token
-    (- Quote)
-    (- StdStr)
-    (- StrEscape)
-    (+ StringLiteral loc StrLit)
-    (+ MultilineLiteral loc (* MlLine) (& loc Text))
-  )
-  (+ MlLine
-    (MlLine
-      (& loc Text)
-      (& loc Text)
-    )
+    (- Str)
+    (+ StringLiteral Span StrLit)
+    (- MlDelim)
+    (- MlContent)
+    (- MlClose)
+    (+ MultilineLiteral Span (* SrcText) SrcText)
   )
 )
 |]
@@ -53,18 +52,14 @@ data StringType
   | CloseTemplate
   deriving (Show)
 
-deriving instance Show a => Show (Token a)
-deriving instance Show a => Show (MlLine a)
-deriving instance Functor Token
-deriving instance Functor MlLine
+deriving instance Show Token
 
-annotation :: Token a -> a
-annotation (Symbol a _) = a
+annotation :: Token -> Span
+annotation (Symbol a) = a.span
+annotation (Number a _ _ _ _ _) = a
 annotation (Punctuation a _) = a
-annotation (Whitespace a _) = a
-annotation (Indentation a _) = a
-annotation (IntegerLiteral a _) = a
-annotation (FloatingLiteral a _) = a
+annotation (Whitespace a) = a.span
+annotation (Eol a _) = a
 annotation (StringLiteral a _) = a
 annotation (MultilineLiteral a _ _) = a
 
@@ -72,101 +67,54 @@ $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
-xlate :: L0.Token loc -> Token loc
-xlate = descendTokenI XlateI
-  { onTokenI = const Nothing
-  , onTokenQuoteI = \_ _ -> internalError "attempt to translate Quote token to next lexing stage"
-  , onTokenStdStrI = \_ _ -> internalError "attempt to translate StdStr token to next lexing stage"
-  , onTokenStrEscapeI = \_ _ -> internalError "attempt to translate StrEscape token to next lexing stage"
+xlate :: MalformedString m => L0.Token -> m Token
+xlate = descendToken Xlate
+  { onToken = const Nothing
+  , onTokenStr = stdStr
+  , onTokenMlDelim = \_ -> internalError "attempt to translate MlDelim token to next lexing stage"
+  , onTokenMlContent = \_ -> internalError "attempt to translate MlContent token to next lexing stage"
+  , onTokenMlClose = \_ -> internalError "attempt to translate MlClose token to next lexing stage"
   }
 
 assemble ::
-  ( Monad m
-  , MalformedString m
-  )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-assemble = stdMode
-
-stdMode ::
-  ( Monad m
-  , MalformedString m
-  )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-stdMode inp0 = S.effect $ S.next inp0 >>= \case
-  Left r -> pure $ pure r
-  Right (L0.Quote l (MlQuote _), rest) -> pure $ do
+  ( MalformedString m )
+  => Stream (Of L0.Token) m r
+  -> Stream (Of Token) m r
+assemble inp0 = S.effect $ S.next inp0 >>= \case
+  Right (L0.MlDelim delim, inp1) -> do
     let st = MlSt
-          { mlL = l.start
+          { mlL = delim.span.start
           , mlLinesReverse = []
-          , mlR = l.end
+          , mlR = delim.span.end
           }
-    mlMode st rest
-  Right (L0.Quote l ty, rest) -> pure $ do
-    let st = StrSt
-          { strL = l.start
-          , strOpenTy = ty
-          , strTxt = ""
-          , strR = l.end
-          }
-    strMode st rest
-  Right (L0.StdStr _ _, _) ->
-    internalError "string part without open quote"
-  Right (L0.StrEscape _ _, _) ->
-    internalError "string escape without open quote"
-  Right (other, rest) -> pure $ do
-    yield $ xlate other
-    stdMode rest
-
-data StrSt = StrSt
-  { strL :: Pos -- ^ position to the left of the open quote mark
-  , strOpenTy :: QuoteType -- ^ type of the open quote
-  , strTxt :: Text -- ^ accumulated string content
-  , strR :: Pos -- ^ position to the right of the string content so far (or the open quote)
-  }
-
-strMode ::
-  ( Monad m
-  , MalformedString m
-  )
-  => StrSt
-  -> Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-strMode st inp0 = S.effect $ S.next inp0 >>= \case
-  Right (L0.Quote _ (MlQuote _), _) ->
-    internalError "standard string closed by triple quote"
-  Right (L0.Quote l ty, rest) -> pure $ do
-    yieldStr $ Just (ty, l.end)
-    stdMode rest
-  Right (L0.StdStr l txt, rest) -> pure $ do
-    strMode st
-      { strTxt = st.strTxt <> txt
-      , strR = l.end
-      } rest
-  Right (L0.StrEscape l c, rest) -> pure $ do
-    strMode st
-      { strTxt = st.strTxt <> T.singleton c -- TODO multiple escapes together might encode a valid text, but this implementation may corrupt them as they add the codepoints one-by-one
-      , strR = l.end
-      } rest
-  Right (other, inp1) -> do
-    raiseExpectingCloseQuote (L0.annotation other)
+    (mlTok, rest) <- mlMode st inp1
     pure $ do
-      yieldStr Nothing
-      let rest = yield other >> inp1
-      stdMode rest
-  Left r -> do
-    raiseExpectingCloseQuote (spanFromPos st.strR)
-    pure $ pure r
-  where
-  yieldStr :: Monad m => Maybe (QuoteType, Pos) -> Stream (Of (Token Span)) m ()
-  yieldStr close = do
-    let tok = StrLit
-          { strTy = mkStrType st.strOpenTy (fst <$> close)
-          , strContent = st.strTxt
-          }
-        spn = unwrapOrPanic_ $ mkSpan st.strL (maybe st.strR snd close)
-    yield $ StringLiteral spn tok
+      yield mlTok
+      assemble rest
+  Right (other, rest) -> do
+    other' <- xlate other
+    pure $ do
+      yield other'
+      assemble rest
+  Left r -> pure $ pure r
+
+stdStr :: MalformedString m
+  => Span
+  -> QuoteType
+  -> [L0.StrToken]
+  -> Maybe QuoteType
+  -> m Token
+stdStr loc open parts closeM = do
+  case closeM of
+    Just _ -> pure ()
+    Nothing -> raiseExpectingCloseQuote (spanFromPos loc.start)
+  let lit = StrLit
+        { strTy = mkStrType open closeM
+        , strContent = T.concat $ flip map parts $ \case
+          L0.StdStr part -> part.text
+          L0.StrEscape _ c -> T.singleton c
+        }
+  pure $ StringLiteral loc lit
 
 mkStrType :: QuoteType -> Maybe QuoteType -> StringType
 mkStrType SqlQuote _ = StrLiteral
@@ -178,80 +126,59 @@ mkStrType (MlQuote _) _ = internalError "mkStrType called on an MlQuote"
 
 data MlSt = MlSt
   { mlL :: Pos -- ^ position to the left of the open quotes
-  , mlLinesReverse :: [MlLine Span]
+  , mlLinesReverse :: [SrcText]
   , mlR :: Pos -- ^ position to the right of the string content so far (or the open quote)
   }
 
 mlMode ::
-  ( Monad m
-  , MalformedString m
-  )
+  ( MalformedString m )
   => MlSt
-  -> Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-mlMode st inp0 = S.effect $ S.next inp0 >>= \case
-  Right (L0.Indentation lWs ws, inp1) -> S.next inp1 >>= \case
-    Right (L0.StdStr l txt, rest) -> pure $ do
-      let st' = addLine (Just (lWs, ws)) (Just (l, txt))
-      mlMode st' rest
-    Right (L0.Quote l (MlQuote _), rest) -> pure $ do
-      yieldStr $ Just (lWs, ws, l.end)
-      stdMode rest
-    Right (L0.Quote _ _, _) -> internalError "standard quote inside muliline literal"
-    Right (other, inp2) -> pure $ do
-      let st' = addLine (Just (lWs, ws)) Nothing
-          rest = yield other >> inp2
-      mlMode st' rest
-    Left r -> pure $ do
-      let st' = addLine (Just (lWs, ws)) Nothing
-          rest = pure r
-      mlMode st' rest
-  Right (L0.StdStr l txt, rest) -> pure $ do
-    let st' = addLine Nothing (Just (l, txt))
-    mlMode st' rest
-  Right (L0.Quote l (MlQuote _), rest) -> pure $ do
-    yieldStr $ Just (spanFromPos l.start, "", l.end)
-    stdMode rest
-  Right (L0.Quote _ _, _) -> internalError "standard quote inside muliline literal"
-  Right (L0.StrEscape _ _, _) -> internalError "string escape inside multiline literal"
-  Right (other, inp1) -> do
-    raiseExpectingCloseQuote (L0.annotation other)
-    pure $ do
-      let rest = yield other >> inp1
-      yieldStr Nothing
-      stdMode rest
-  Left r -> do
-    raiseExpectingCloseQuote (spanFromPos st.mlR)
-    pure $ do
-      yieldStr Nothing
-      pure r
-  where
-  addLine
-    :: Maybe (Span, Text) -- ^ leading whitespace
-    -> Maybe (Span, Text) -- ^ line content
-    -> MlSt
-  addLine (Just ws) (Just txt) = goLine ws txt
-  addLine (Just (lWs, ws)) Nothing = goLine (lWs, ws) (spanFromPos lWs.end, "")
-  addLine Nothing (Just (l, txt)) = goLine (spanFromPos l.start, "") (l, txt)
-  addLine Nothing Nothing = goLine (spanFromPos st.mlR, "") (spanFromPos st.mlR, "")
-  goLine :: (Span, Text) -> (Span, Text) -> MlSt
-  goLine (lWs, ws) (l, txt) =
-    let line' = MlLine (lWs, ws) (l, txt)
-     in st
-          { mlLinesReverse = line' : st.mlLinesReverse
-          , mlR = l.end
+  -> Stream (Of L0.Token) m r
+  -> m (Token, Stream (Of L0.Token) m r)
+mlMode st inp0 = S.next inp0 >>= \case
+-- OK: accumulate content
+  Right (L0.MlContent line, rest) -> do
+    let st' = st
+          { mlLinesReverse = line : st.mlLinesReverse
+          , mlR = line.span.end
           }
+    mlMode st' rest
+-- OK: ignore line endings
+  Right (L0.Eol l _, rest) -> do
+    let st' = st{ mlR = l.end }
+    mlMode st' rest
+-- DONE: ends at close without indent
+  Right (L0.MlClose l, rest) -> do
+    let tok = MultilineLiteral spn lines lastIndent
+        lines = reverse st.mlLinesReverse
+        lastIndent = Src.fromPos st.mlR ""
+        spn = unwrapOrPanic_ $ mkSpan st.mlL l.end
+    pure (tok, rest)
+  Right (L0.Whitespace lastIndent, inp1) -> S.next inp1 >>= \case
+-- DONE: ends at close with indent
+    Right (L0.MlClose l, rest) -> do
+      let tok = MultilineLiteral spn lines lastIndent
+          spn = unwrapOrPanic_ $ mkSpan st.mlL l.end
+          lines = reverse st.mlLinesReverse
+      pure (tok, rest)
+-- BAD: ends at end of file (with indent)
+    Left r -> do
+      raiseExpectingCloseQuote $ spanFromPos lastIndent.span.end
+      let tok = MultilineLiteral spn lines lastIndent
+          lines = reverse st.mlLinesReverse
+          spn = unwrapOrPanic_ $ mkSpan st.mlL lastIndent.span.end
+      pure (tok, pure r)
+-- BAD: internal errors
+    Right _ -> internalError "unexpected token before MlClose"
+  Right _ -> internalError "unexpected token before MlClose"
+-- BAD ends at end of file (without indent)
+  Left r -> do
+    raiseExpectingCloseQuote $ spanFromPos st.mlR
+    let tok = MultilineLiteral spn lines lastIndent
+        lines = reverse st.mlLinesReverse
+        lastIndent = Src.fromPos st.mlR ""
+        spn = unwrapOrPanic_ $ mkSpan st.mlL st.mlR
+    pure (tok, pure r)
 
-  yieldStr :: Monad m => Maybe (Span, Text, Pos) -> Stream (Of (Token Span)) m ()
-  yieldStr Nothing = do
-    let spn = unwrapOrPanic_ $ mkSpan st.mlL st.mlR
-        preDelim = (spanFromPos st.mlR, "")
-    yield $ MultilineLiteral spn (reverse st.mlLinesReverse) preDelim
-  yieldStr (Just (lWs, ws, rDelim)) = do
-    let spn = unwrapOrPanic_ $ mkSpan st.mlL rDelim
-        preDelim = (lWs, ws)
-    yield $ MultilineLiteral spn (reverse st.mlLinesReverse) preDelim
-
-
-class MalformedString m where
+class Monad m => MalformedString m where
   raiseExpectingCloseQuote :: Span -> m ()

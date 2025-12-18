@@ -1,6 +1,7 @@
 module Language.CCS.Lexer.NoiseReduction
   ( CCS(..)
   , Token(..)
+  , StrToken(..)
   , annotation
   , pipeline
   , DeleteComment(..)
@@ -10,17 +11,15 @@ module Language.CCS.Lexer.NoiseReduction
 
 import Control.Monad (when)
 import Data.Function ((&))
-import Data.Text (Text)
 import Language.CCS.Error (internalError)
 import Language.CCS.Lexer.Morpheme (EolType(..))
-import Language.Location (Span, spanFromPos)
+import Language.Location (Span)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Language.CCS.Lexer.Morpheme as L0
-import qualified Language.Text as Src
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
@@ -29,6 +28,9 @@ import qualified Streaming.Prelude as S
   (* Token
     (- Comment)
     (- Illegal)
+  )
+  (* StrToken
+    (- IllStr)
   )
 )
 |]
@@ -50,13 +52,24 @@ annotation (Eol a _) = a
 $(pure [])
 [defpass|(from L0:CCS to CCS)|]
 
-xlate :: L0.Token -> Token
-xlate = descendTokenI XlateI
-  { onTokenI = const Nothing
-  , onStrTokenI = const Nothing
-  , onTokenCommentI = \_ -> internalError "attempt to translate Comment token to next lexing stage"
-  , onTokenIllegalI = \_ -> internalError "attempt to translate Illegal token to next lexing stage"
+xlate :: RaiseIllegalBytes m => Xlate m
+xlate = Xlate
+  { onToken = \case
+      L0.Str l open body close -> Just $ do
+        body' <- strDeletions body
+        pure $ Str l open body' close
+      _ -> Nothing
+  , onStrToken = const Nothing
+  , onTokenComment = \_ -> internalError "attempt to translate Comment token to next lexing stage"
+  , onTokenIllegal = \_ -> internalError "attempt to translate Illegal token to next lexing stage"
+  , onStrTokenIllStr = \_ -> internalError "attempt to translate IllStr token to next lexing stage"
   }
+
+xlateTok :: RaiseIllegalBytes m => L0.Token -> m Token
+xlateTok = descendToken xlate
+
+xlateStr :: RaiseIllegalBytes m => L0.StrToken -> m StrToken
+xlateStr = descendStrToken xlate
 
 -- | Gets rid of comments, then trailing whitespace.
 -- Raises an error on illegal tokens.
@@ -64,8 +77,7 @@ xlate = descendTokenI XlateI
 -- The caller gets the chance to do something with comments before their removal.
 -- Likewise, the caller gets to choose whether to abort or do error recovery on illegal tokens.
 pipeline ::
-  ( Monad m
-  , DeleteComment m
+  ( DeleteComment m
   , RaiseIllegalBytes m
   , WhitespaceError m )
   => Stream (Of L0.Token) m r
@@ -79,8 +91,7 @@ pipeline input
   & dedupeEol
 
 simpleDeletions ::
-  ( Monad m
-  , DeleteComment m
+  ( DeleteComment m
   , WhitespaceError m
   , RaiseIllegalBytes m )
   => Stream (Of L0.Token) m r
@@ -110,10 +121,21 @@ simpleDeletions = loop
       deleteComment txt
       pure $ loop inp1
   -- base cases
-    Right (other, rest) -> pure $ do
-      yield (xlate other)
-      loop rest
+    Right (other, rest) -> do
+      other' <- xlateTok other
+      pure $ yield other' >> loop rest
     Left r -> pure $ pure r
+
+strDeletions :: RaiseIllegalBytes m
+  => [L0.StrToken]
+  -> m [StrToken]
+strDeletions (L0.IllStr err : rest) = do
+  raiseIllegalBytesOrChars err
+  strDeletions rest
+strDeletions (other : rest) = do
+  other' <- xlateStr other
+  (other' :) <$> strDeletions rest
+strDeletions [] = pure []
 
 dedupeWs ::
   ( Monad m )
@@ -174,8 +196,7 @@ dedupeEol = firstLine
     Left r -> pure $ pure r
 
 consistentNewlines ::
-  ( Monad m
-  , WhitespaceError m )
+  ( WhitespaceError m )
   => Maybe (Span, EolType)
   -> Stream (Of L0.Token) m r
   -> Stream (Of L0.Token) m r
@@ -199,8 +220,7 @@ consistentNewlines (Just (l, ty)) = loop
     Right (other, rest) -> pure $ yield other >> loop rest
 
 endsInNewline ::
-  ( Monad m
-  , WhitespaceError m )
+  ( WhitespaceError m )
   => Stream (Of L0.Token) m r
   -> Stream (Of L0.Token) m r
 endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
@@ -217,7 +237,7 @@ endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
       pure $ yield x >> endsInNewline rest
   Left r -> pure $ pure r
 
-class DeleteComment m where
+class Monad m => DeleteComment m where
   -- | For most purposes, we'd just strip comments out of the token stream with no fanfare.
   -- Indeed, a valid implementation just ignores the comment Span and 'Text' and returns the unit.
   --
@@ -233,7 +253,7 @@ class DeleteComment m where
 -- - should we recover from the error and continue? (my morphemes, we already have)
 -- - should I merge adjacent illegal bytes?
 -- - how should the errors be reported?
-class RaiseIllegalBytes m where
+class Monad m => RaiseIllegalBytes m where
   -- TODO someday, I'll distinguish between decoding errors and illegal codepoints
   -- also bad bytes are just being replaced by the unicode Replacement Character
   raiseIllegalBytesOrChars :: SrcText -> m ()
@@ -243,7 +263,7 @@ data InconsistentNewlines = InconsistentNewlines
   , found :: (Span, EolType)
   }
   deriving (Show)
-class WhitespaceError m where
+class Monad m => WhitespaceError m where
   raiseTrailingWhitespace :: Span -> m ()
   raiseInconsistentNewlines :: InconsistentNewlines -> m ()
   raiseNoNlAtEof :: Span -> m ()

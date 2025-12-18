@@ -355,7 +355,7 @@ takeDqEsc = do
   (loc, tokE) <- Src.withSpan $ stdEsc <|> xEsc <|> uEsc
   pure $ case tokE of
     Right code -> StrEscape loc code
-    Left err -> IllStr loc err
+    Left err -> IllStr $ Src.fromPos loc.start err
   where
   stdEsc :: Src.Parse (Either Text Char)
   stdEsc = do
@@ -405,7 +405,7 @@ takeDqIllegal :: Src.Parse StrToken
 takeDqIllegal = do
   -- TODO perhaps other characters should be illegal, outisde of backslash (and doublequote/backtick, which end the token)
   (loc, bs) <- Src.withSpan $ T.singleton <$> Src.sat (== '\\')
-  pure $ IllStr loc bs
+  pure $ IllStr $ Src.fromPos loc.start bs
 
 --- Multi-line Strings ---
 
