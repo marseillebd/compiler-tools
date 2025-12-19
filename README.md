@@ -25,6 +25,36 @@ It's all in preparation for a scope checker/renamer.
 
 # Ideas
 
+## Lisp Macros
+
+I've complained before that Lisp has unquote and unquote splicing, supposedly demonstrating that Lisp does content with multiple forms of syntax.
+I was wrong, because `,(foo)` is equivalent to ``,@( `(foo) )`` --- unquote can be implemented with unquote-splicing.
+
+However, Lisp does have another syntactic form from combinations: atoms.
+Imagine code such as the following pseudo-lisp, where we want to alter the generated symbols according to an input name.
+This actually mirrors some code I've written (but not macro generated) in my CCS project.
+I've probably made some lisp mistakes because sorting out the finer points of where to put parens or quote/unquote (it's been a while).
+Point is, tkae a look at the `${name}` syntax I'm using so splice symbols together.
+I generate constructor names in four places, and craete a function name in one other place.
+If I had to do this in real lisp, I'd have to actually call a bunch of functions to unwrap the symbols, do the string concat, and wrap them back up... just like Template Haskell needs to do at any syntactic category not suppoorted by quasiquotation.
+Of course, you can write a reader macro, but I really don't think that helps the Lispers case: reader macros can do anything, and are to be distrusted imho.
+
+```
+(defmacro mkAssemble(name)
+    `(lambda (loc n) (cond
+        ((= n 1) ('${name} loc))
+        ((= n 2) ('${name}s2 loc))
+        ((= n 3) ('${name}s3 loc))
+        (else (begin
+            (raiseTooMany${name}s loc)
+            ('${name}s3 loc)
+        ))
+    ))
+)
+(mkAssemble Dot)
+(mkAssemble Colon)
+```
+
 ## The Vision
 
 ```

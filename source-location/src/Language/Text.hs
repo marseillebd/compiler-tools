@@ -19,6 +19,7 @@ module Language.Text
   , takeWhile1
   , takeAll
   , takePrefix
+  , manyN
   , branch
 ) where
 
@@ -190,6 +191,14 @@ takePrefix needle = P $ \st -> do
     , mid = st.mid `advText` needle
     , rest = suffix
     }, needle)
+
+manyN :: Int -> Parse a -> Parse [a]
+manyN i _ | i <= 0 = pure []
+manyN i p = (Just <$> p <|> pure Nothing) >>= \case
+  Just x -> do
+    xs <- manyN (i - 1) p
+    pure $ x : xs
+  Nothing -> pure []
 
 -- ^ given a list of predicate-consequent pairs, once one predicate succeeds, parse its consequent.
 -- once a consequent has been chosen, do not backtrack

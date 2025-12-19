@@ -1,8 +1,9 @@
-module Language.CCS.Lexer.Assemble.Strings
+module Language.CCS.Lexer.Assemble
   ( CCS(..)
   , Token(..)
   , StrLit(..)
   , StringType(..)
+  , PunctuationType(..)
   , annotation
   , assemble
   , MalformedPunctuation(..)

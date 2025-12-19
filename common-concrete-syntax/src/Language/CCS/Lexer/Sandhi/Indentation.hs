@@ -6,67 +6,63 @@ module Language.CCS.Lexer.Sandhi.Indentation
   , MalformedIndentation(..)
   ) where
 
-import Prelude hiding (lines)
+import Prelude hiding (lines, init)
 
-import Control.Monad (when, unless, replicateM_)
+import Control.Applicative ((<|>))
+import Control.Monad (forM, when, unless, replicateM_, void)
 import Data.Text (Text)
 import Language.CCS.Error (internalError, unwrapOrPanic_)
-import Language.Location (incCol, Span, mkSpan)
+import Language.Location (incCol, Span, mkSpan, spanFromPos)
 import Language.Nanopass (deflang, defpass)
+import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Data.Text as T
-import qualified Language.CCS.Lexer.Assemble.Strings as L0
+import qualified Language.CCS.Lexer.Assemble as L0
+import qualified Language.Text as Src
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
 [deflang|
-((CCS loc) from L0:CCS
+(CCS from L0:CCS
   (* Token
-    (- Indentation)
-    (+ Indent loc)
-    (+ Nextline loc)
-    (+ Dedent loc)
+    (- Eol)
+    (+ Indent Span)
+    (+ Nextline Span)
+    (+ Dedent Span)
+
     (- MultilineLiteral)
-    (+ MultilineLiteral loc (* MlLine))
-  )
-  (* MlLine
-    (- MlLine)
-    (+ MlLine (& loc Text))
+    (+ MultilineLiteral Span (* SrcText))
   )
 )
 |]
 
-deriving instance Show a => Show (Token a)
-deriving instance Show a => Show (MlLine a)
-deriving instance Functor Token
-deriving instance Functor MlLine
+deriving instance Show Token
+deriving instance Show PunctuationType
 
-annotation :: Token a -> a
-annotation (Symbol a _) = a
+annotation :: Token -> Span
+annotation (Symbol a) = a.span
 annotation (Punctuation a _) = a
+annotation (Whitespace a) = a.span
 annotation (Indent a) = a
 annotation (Nextline a) = a
 annotation (Dedent a) = a
-annotation (Whitespace a _) = a
 annotation (IntegerLiteral a _) = a
 annotation (FloatingLiteral a _) = a
 annotation (StringLiteral a _) = a
 annotation (MultilineLiteral a _) = a
 
-
 $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
-xlate :: L0.Token loc -> Token loc
-xlate = descendTokenI XlateI
-  { onTokenI = const Nothing
-  , onMlLineI = const Nothing
-  , onTokenIndentationI = \_ _ -> internalError "attempt to translate Indentation token to next lexing stage"
-  , onTokenMultilineLiteralI = \_ _ _ -> internalError "attempt to translate MultilineLiteral to next lexing stage"
-  , onMlLineMlLineI = \_ _ -> internalError "attempt to translate MlLine to next lexing stage"
+xlate :: MalformedIndentation m => IndentState -> L0.Token -> m Token
+xlate st = descendToken Xlate
+  { onToken = const Nothing
+  , onPunctuationType = const Nothing
+  , onTokenEol = \_ -> internalError "attempt to translate Eol to next lexing stage"
+  , onTokenMultilineLiteral = \loc body predelim -> xlateMl st loc body predelim
   }
 
 ------ Main ------
@@ -74,154 +70,181 @@ xlate = descendTokenI XlateI
 process ::
   ( MalformedIndentation m
   )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-process = findFirstUnindented . sanitize
+  => Stream (Of L0.Token) m r
+  -> Stream (Of Token) m r
+process inp0 = do
+  inp1 <- findFirstUnindented inp0
+  findFirstIndented inp1 >>= \case
+    Right (st0, inp2) -> detectIndentation st0 inp2
+    Left r -> pure r
 
--- This one removes duplicate indentations (ie blank lines)
-sanitize ::
-  ( MalformedIndentation m
-  )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (L0.Token Span)) m r
-sanitize inp0 = S.effect $ S.next inp0 >>= \case
-  Right (i1@(L0.Indentation _ _), inp1) -> S.next inp1 >>= \case
-    Right (i2@(L0.Indentation _ _), inp2) -> pure $ do
-      let rest = yield i2 >> inp2
-      sanitize rest
-    Right (other, inp2) -> pure $ do
-      yield i1
-      let rest = yield other >> inp2
-      sanitize rest
-    Left r -> pure $ yield i1 >> pure r
-  Right (other, rest) -> pure $ do
-    yield other
-    sanitize rest
-  Left r -> pure $ pure r
+-------------------------
+------ Indentation ------
+-------------------------
 
 detectIndentation ::
   ( MalformedIndentation m
   )
   => IndentState
-  -> Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
+  -> Stream (Of L0.Token) m r
+  -> Stream (Of Token) m r
 detectIndentation st inp0 = S.effect $ S.next inp0 >>= \case
-  Right (L0.Indentation l ws, inp1) -> pure $ do
-    newLevel <- S.effect $ analyzeIndent st (l, ws)
-    detectIndentation (newLevel, snd st) inp1
-  Right (L0.MultilineLiteral l lines preDelim, inp1) -> do
-    lines' <- mapM (xlateMl $ indentString st) lines
-    when (snd preDelim /= indentString st) $ do
-      raiseBadWhitespaceBeforeMultiLineDelimiter (fst preDelim) (indentString st)
+  Right (L0.Eol eolLoc _, inp1) -> S.next inp1 >>= \case
+    Right (L0.Whitespace ws, rest) -> pure $ do
+      newLvl <- S.effect $ analyzeIndent st ws
+      detectIndentation (newLvl, snd st) rest
+    Right (L0.Eol _ _, _) -> internalError "found eol at start of file"
+    Right (other, inp2) -> pure $ do
+      let ws = Src.fromPos (L0.annotation other).start ""
+          rest = yield other >> inp2
+      newLvl <- S.effect $ analyzeIndent st ws
+      detectIndentation (newLvl, snd st) rest
+    Left r -> pure $ do
+      replicateM_ (fst st) $
+        yield $ Dedent eolLoc
+      pure r
+  Right (other, rest) -> do
+    other' <- xlate st other
     pure $ do
-      yield $ MultilineLiteral l lines'
-      detectIndentation st inp1
-  Right (other, inp1) -> pure $ do
-    yield $ xlate other
-    detectIndentation st inp1
-  Left r -> pure $ pure r
+      yield other'
+      detectIndentation st rest
+  Left _ -> internalError "no eol at end of token stream"
 
 analyzeIndent :: MalformedIndentation m
   => IndentState
-  -> (Span, Text)
-  -> m (Stream (Of (Token Span)) m Int)
-analyzeIndent (lvl, ty) (l, ws) = do
-  (lIndent, newLvl) <- go ty
+  -> SrcText
+  -> m (Stream (Of Token) m Int)
+analyzeIndent (lvl, ty) ws = do
+  let takeOneLvl = case ty of
+        Spaces n -> void $ Src.takePrefix (T.replicate n " ")
+        Tab -> void $ Src.sat (== '\t')
+  let (indent, newLvl, rest) = unwrapOrPanic_ $ Src.runParse ws $
+        length <$> Src.manyN (lvl + 1) takeOneLvl
+  unless (Src.null rest) $ do
+    raiseLeadingWhitespace rest.span
   pure $ if
     | newLvl == lvl -> do
-      yield $ Nextline lIndent
+      yield $ Nextline indent.span
       pure lvl
     | newLvl == lvl + 1 -> do
-      yield $ Indent lIndent
+      yield $ Indent indent.span
       pure newLvl
     | newLvl < lvl -> do
       replicateM_ (lvl - newLvl) $ do
-        yield $ Dedent lIndent
+        yield $ Dedent indent.span
       pure newLvl
     | otherwise -> -- indent deeper than n + 1
-      internalError "length of leading tabs is not let, eq, or one more than current tab state"
-  where
-  go (Spaces n) = do
-        -- compute which whitespace is valid indent and which isn't, also the new level
-    let (allSpaces, rest2) = T.span (== ' ') ws -- take only spaces from the front
-        (maxSpaces, rest1) = T.splitAt (n * (lvl + 1)) allSpaces -- then clamp to the maximum indent
-        (newLvl, extraSpaces)  = T.length maxSpaces `divMod` n
-        (spaces, rest0) = T.splitAt (T.length maxSpaces - extraSpaces) maxSpaces -- then remove any spaces that represent a partial indent
-        rest = rest0 <> rest1 <> rest2
-        -- compute location between indentation and leading whitespace
-        lMid = T.foldl' (\c _ -> incCol c) l.start spaces
-        lIndent = unwrapOrPanic_ $ mkSpan l.start lMid
-    unless (T.null rest) $ do
-      let lRest = unwrapOrPanic_ $ mkSpan lMid l.end
-      raiseLeadingWhitespace lRest
-    pure (lIndent, newLvl)
-  go Tab = do
-        -- compute which whitespace is valid indent and which isn't, also the new level
-    let (allTabs, rest1) = T.span (== '\t') ws -- take only tabs from the front
-        (tabs, rest0) = T.splitAt (lvl + 1) allTabs -- then clamp to the maximum indent
-        rest = rest0 <> rest1
-        newLvl = T.length tabs
-        -- compute location between indentation and leading whitespace
-        lMid = T.foldl' (\c _ -> incCol c) l.start tabs
-        lIndent = unwrapOrPanic_ $ mkSpan l.start lMid
-    unless (T.null rest) $ do
-      let lRest = unwrapOrPanic_ $ mkSpan lMid l.end
-      raiseLeadingWhitespace lRest
-    pure (lIndent, newLvl)
+      internalError "length of leading tabs is not le, eq, or one more than current tab state"
 
 ------ Initialization ------
 
 findFirstUnindented ::
   ( MalformedIndentation m )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
-findFirstUnindented inp0 = S.effect $ S.next inp0 >>= \case
-  Right (L0.Indentation _ "", inp1) -> pure $ findFirstIndented inp1
-  Right (L0.Indentation l _, inp1) -> do
-    raiseUnexpectedIndent l
-    pure $ findFirstUnindented inp1
-  Right (L0.MultilineLiteral l lines preDelim, inp1) -> do
-    lines' <- mapM (xlateMl "") lines
-    when (snd preDelim /= "") $ do
-      raiseBadWhitespaceBeforeMultiLineDelimiter (fst preDelim) ""
-    pure $ do
-      yield $ MultilineLiteral l lines'
-      findFirstUnindented inp1
-  Right (other, inp1) -> pure $ do
-    yield $ xlate other
-    findFirstUnindented inp1
-  Left r -> pure $ pure r
+  => Stream (Of L0.Token) m r
+  -> Stream (Of Token) m (Stream (Of L0.Token) m r)
+findFirstUnindented = init
+  where
+  init inp0 = S.effect $ S.next inp0 >>= \case
+    Right (L0.Whitespace ws, rest) -> do
+      raiseUnexpectedIndent ws.span
+      pure $ loop rest
+    Right (L0.Eol _ _, _) -> internalError "found eol at start of file"
+    Right (other, inp1) -> pure $
+      pure $ yield other >> inp1
+    Left r -> pure $ pure $ pure r
+  loop inp0 = S.effect $ S.next inp0 >>= \case
+    Right (L0.Eol _ _, inp1) -> S.next inp1 >>= \case
+      Right (L0.Whitespace ws, rest) -> do
+        raiseUnexpectedIndent ws.span
+        pure $ loop rest
+      Right (L0.Eol _ _, _) -> internalError "found eol after eol"
+      Right (other, inp2) -> pure $
+        pure $ yield other >> inp2
+      Left r -> pure $ pure $ pure r
+    Right (other, rest) -> do
+      other' <- xlate unknownIndent other
+      pure $ do
+        yield other'
+        loop rest
+    Left r -> pure $ pure $ pure r
 
 findFirstIndented ::
   ( MalformedIndentation m )
-  => Stream (Of (L0.Token Span)) m r
-  -> Stream (Of (Token Span)) m r
+  => Stream (Of L0.Token) m r
+  -> Stream (Of Token) m (Either r (IndentState, Stream (Of L0.Token) m r))
 findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
-  Right (L0.Indentation l "", inp1) -> pure $ do
-    yield $ Nextline l
-    findFirstIndented inp1
-  Right (L0.Indentation l ws, inp1) -> do
-    indentTy <- case getIndentType (l, ws) of
-      (ty, _, T.Empty) -> pure ty
-      (ty, l', _) -> do
-        raiseLeadingWhitespace l'
-        pure ty
+  -- found it
+  Right (L0.Eol _ _, inp1) -> S.next inp1 >>= \case
+    Right (L0.Whitespace ws, rest) -> do
+      let (okWs, ty, badWs) = getIndentType ws
+      unless (Src.null badWs) $
+        raiseLeadingWhitespace badWs.span
+      pure $ do
+        yield $ Indent okWs.span
+        pure $ Right ((1, ty), rest)
+  -- another unindented line
+    Right (other, rest) -> do
+      other' <- xlate unknownIndent other
+      pure $ do
+        yield $ Nextline (spanFromPos (L0.annotation other).start)
+        yield other'
+        findFirstIndented rest
+  -- base cases
+    Left r -> pure $ pure $ Right (unknownIndent, pure r)
+  Right (other, rest) -> do
+    other' <- xlate unknownIndent other
     pure $ do
-      yield $ Indent l
-      detectIndentation (1, indentTy) inp1
-  Right (L0.MultilineLiteral l lines preDelim, inp1) -> do
-    lines' <- mapM (xlateMl "") lines
-    when (snd preDelim /= "") $ do
-      raiseBadWhitespaceBeforeMultiLineDelimiter (fst preDelim) ""
-    pure $ do
-      yield $ MultilineLiteral l lines'
-      findFirstUnindented inp1
-  Right (other, inp1) -> pure $ do
-    yield $ xlate other
-    findFirstIndented inp1
-  Left r -> pure $ pure r
+      yield other'
+      findFirstIndented rest
+  Left r -> pure $ pure $ Left r
 
+getIndentType :: SrcText -> (SrcText, IndentType, SrcText)
+getIndentType src = case Src.runParse src detect of
+  Just (ok, ty, rest) -> (ok, ty, rest)
+  Nothing -> internalError "detecting indentation over empty string"
+  where
+  detect
+     =  (Src.sat (== '\t') >> pure Tab)
+    <|> (Src.takeWhile1 (== ' ') >>= \it -> pure $ Spaces (T.length it))
+
+--------------------------------
+------ Multiline Literals ------
+--------------------------------
+
+xlateMl :: forall m.
+  ( MalformedIndentation m )
+  => IndentState
+  -> Span
+  -> [SrcText]
+  -> SrcText
+  -> m Token
+xlateMl (0, _) loc body predelim = do
+  unless (Src.null predelim) $
+    raiseUnexpectedIndent predelim.span
+  pure $ MultilineLiteral loc body
+xlateMl st loc body predelim = do
+  body' <- forM body stripIndent
+  predelim' <- stripIndent predelim
+  unless (Src.null predelim') $
+    raiseLeadingWhitespace predelim'.span
+  pure $ MultilineLiteral loc body'
+  where
+  stripIndent :: SrcText -> m SrcText
+  stripIndent src = case indentStripper src of
+    Right (_, rest) -> pure rest
+    Left (tooLittle, rest) -> do
+      raiseInsufficientIndentation tooLittle.span
+      pure rest
+  indentStripper :: SrcText -> Either (SrcText, SrcText) (SrcText, SrcText)
+  indentStripper src = case Src.execParse src $
+    Src.takePrefix (indentString st) of
+      Just it -> Right it
+      Nothing -> Left $ unwrapOrPanic_ $ Src.execParse src $
+        Src.takeWhile (== (indentChar st))
+
+---------------------
 ------ Helpers ------
+---------------------
 
 type IndentState = (Int, IndentType)
 
@@ -229,39 +252,22 @@ data IndentType
   = Tab
   | Spaces Int
 
-getIndentType :: (Span, Text) -> (IndentType, Span, Text)
-getIndentType (_, "") = internalError "detecting indentation over empty string"
-getIndentType (l, '\t' T.:< rest) =
-  let l' = unwrapOrPanic_ $ mkSpan (incCol l.start) l.end
-   in (Tab, l', rest)
-getIndentType (l, txt@(' ' T.:< _)) =
-  let (spaces, rest) = T.span (== ' ') txt
-      l' = unwrapOrPanic_ $ mkSpan (T.foldl' (\c _ -> incCol c) l.start spaces) l.end
-   in (Spaces $ T.length spaces, l', rest)
-getIndentType _ = internalError "non-empty indentation does not start with space or tab"
+unknownIndent :: IndentState
+unknownIndent = (0, undefined) -- the indent type doesn't matter if the level is zero
 
 indentString :: IndentState -> Text
 indentString (n, Tab) = T.replicate n "\t"
 indentString (n, Spaces m) = T.replicate (n * m) " "
 
-xlateMl ::
-  ( MalformedIndentation m )
-  => Text -- ^ leading indent
-  -> L0.MlLine Span
-  -> m (MlLine Span)
-xlateMl indent (L0.MlLine (lWs, ws) (lTxt, txt)) = case T.stripPrefix indent ws of
-  Nothing -> do
-    raiseInsufficientIndentation lWs
-    pure $ MlLine (lTxt, txt)
-  Just wsTxt -> do
-    let rIndent = T.foldl' (\c _ -> incCol c) lWs.start indent
-        newSpan = unwrapOrPanic_ $ mkSpan rIndent lTxt.end
-    pure $ MlLine (newSpan, wsTxt <> txt)
+indentChar :: IndentState -> Char
+indentChar (_, Tab) = '\t'
+indentChar (_, Spaces _) = ' '
 
+--------------------
 ------ Errors ------
+--------------------
 
 class Monad m => MalformedIndentation m where
   raiseUnexpectedIndent :: Span -> m ()
   raiseInsufficientIndentation :: Span -> m ()
-  raiseBadWhitespaceBeforeMultiLineDelimiter :: Span -> Text -> m ()
   raiseLeadingWhitespace :: Span -> m ()
