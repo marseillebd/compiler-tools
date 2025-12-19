@@ -397,7 +397,7 @@ Either the expected indentation (as for non-trivial embedded lines) is a prefix 
     in which case it is valid indentation and the content is empty.
 Once indentation has been stripped from embedded lines, it is no longer necessary.
 
-> **Ratinoale**
+> **Rationale**
 >
 > We want to be able to embed arbitrary text into CCS for later processing.
 > Arbitrary text may contain leading whitespace, often not at all what is expected (consider makefiles, which must have tab-indentation).

@@ -186,6 +186,13 @@ instance Read Span where
     end <- readPrec @Pos
     maybe pfail pure $ mkSpan start end
 
+instance Semigroup Span where
+  -- | Takes the convex hull of two spans.
+  a <> b = Span
+    { _start = min a.start b.start
+    , _end = max a.end b.end
+    }
+
 --------------
 ---- TODO ----
 --------------

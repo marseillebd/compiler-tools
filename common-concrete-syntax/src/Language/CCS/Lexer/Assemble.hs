@@ -15,9 +15,9 @@ import Prelude hiding (lines, exp)
 import Control.Monad (when)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unwrapOrPanic_)
+import Language.CCS.Error (internalError)
 import Language.CCS.Lexer.Morpheme (QuoteType(..), Sign, Radix(..))
-import Language.Location (Pos, Span, spanFromPos, mkSpan)
+import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
@@ -129,9 +129,8 @@ assemble ::
 assemble inp0 = S.effect $ S.next inp0 >>= \case
   Right (L0.MlDelim delim, inp1) -> do
     let st = MlSt
-          { mlL = delim.span.start
+          { mlSpan = delim.span
           , mlLinesReverse = []
-          , mlR = delim.span.end
           }
     (mlTok, rest) <- mlMode st inp1
     pure $ do
@@ -253,9 +252,8 @@ mkStrType (MlQuote _) _ = internalError "mkStrType called on an MlQuote"
 -------------------------------
 
 data MlSt = MlSt
-  { mlL :: Pos -- ^ position to the left of the open quotes
+  { mlSpan :: Span
   , mlLinesReverse :: [SrcText]
-  , mlR :: Pos -- ^ position to the right of the string content so far (or the open quote)
   }
 
 mlMode ::
@@ -268,25 +266,25 @@ mlMode st inp0 = S.next inp0 >>= \case
   Right (L0.MlContent line, rest) -> do
     let st' = st
           { mlLinesReverse = line : st.mlLinesReverse
-          , mlR = line.span.end
+          , mlSpan = st.mlSpan <> line.span
           }
     mlMode st' rest
 -- OK: ignore line endings
   Right (L0.Eol l _, rest) -> do
-    let st' = st{ mlR = l.end }
+    let st' = st{ mlSpan = st.mlSpan <> l }
     mlMode st' rest
 -- DONE: ends at close without indent
   Right (L0.MlClose l, rest) -> do
     let tok = MultilineLiteral spn lines lastIndent
         lines = reverse st.mlLinesReverse
-        lastIndent = Src.fromPos st.mlR ""
-        spn = unwrapOrPanic_ $ mkSpan st.mlL l.end
+        lastIndent = Src.fromPos st.mlSpan.end ""
+        spn = st.mlSpan <> l
     pure (tok, rest)
   Right (L0.Whitespace lastIndent, inp1) -> S.next inp1 >>= \case
 -- DONE: ends at close with indent
     Right (L0.MlClose l, rest) -> do
       let tok = MultilineLiteral spn lines lastIndent
-          spn = unwrapOrPanic_ $ mkSpan st.mlL l.end
+          spn = st.mlSpan <> l
           lines = reverse st.mlLinesReverse
       pure (tok, rest)
 -- BAD: ends at end of file (with indent)
@@ -294,18 +292,17 @@ mlMode st inp0 = S.next inp0 >>= \case
       raiseExpectingCloseQuote $ spanFromPos lastIndent.span.end
       let tok = MultilineLiteral spn lines lastIndent
           lines = reverse st.mlLinesReverse
-          spn = unwrapOrPanic_ $ mkSpan st.mlL lastIndent.span.end
+          spn = st.mlSpan <> lastIndent.span
       pure (tok, pure r)
 -- BAD: internal errors
     Right _ -> internalError "unexpected token before MlClose"
   Right _ -> internalError "unexpected token before MlClose"
 -- BAD ends at end of file (without indent)
   Left r -> do
-    raiseExpectingCloseQuote $ spanFromPos st.mlR
-    let tok = MultilineLiteral spn lines lastIndent
+    raiseExpectingCloseQuote $ spanFromPos st.mlSpan.end
+    let tok = MultilineLiteral st.mlSpan lines lastIndent
         lines = reverse st.mlLinesReverse
-        lastIndent = Src.fromPos st.mlR ""
-        spn = unwrapOrPanic_ $ mkSpan st.mlL st.mlR
+        lastIndent = Src.fromPos st.mlSpan.end ""
     pure (tok, pure r)
 
 --------------------
