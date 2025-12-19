@@ -1,6 +1,7 @@
-module Language.CCS.Lexer.Sandhi.Indentation
+module Language.CCS.Lexer.Indentation
   ( CCS(..)
   , Token(..)
+  , PunctuationType(..)
   , process
   , MalformedIndentation(..)
   ) where
@@ -8,11 +9,11 @@ module Language.CCS.Lexer.Sandhi.Indentation
 import Prelude hiding (lines, init)
 
 import Control.Applicative ((<|>))
-import Control.Monad (forM, when, unless, replicateM_, void)
+import Control.Monad (forM, unless, replicateM_, void)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unwrapOrPanic_)
-import Language.Location (incCol, Span, mkSpan, spanFromPos)
+import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
@@ -65,7 +66,9 @@ xlate st = descendToken Xlate
   , onTokenMultilineLiteral = \loc body predelim -> xlateMl st loc body predelim
   }
 
+------------------
 ------ Main ------
+------------------
 
 process ::
   ( MalformedIndentation m

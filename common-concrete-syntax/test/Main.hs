@@ -11,7 +11,7 @@ import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
 import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
 import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
-import Language.CCS.Lexer.Sandhi.Indentation (MalformedIndentation(..))
+import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
@@ -19,7 +19,7 @@ import qualified Data.Text.IO as T
 import qualified Language.CCS.Lexer.Assemble as LexA
 import qualified Language.CCS.Lexer.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
-import qualified Language.CCS.Lexer.Sandhi.Indentation as LexSI
+import qualified Language.CCS.Lexer.Indentation as LexI
 import qualified Streaming.Prelude as S
 
 main :: IO ()
@@ -42,7 +42,7 @@ main = defaultMain $ testGroup "Tests"
             & S.each
             & LexNR.pipeline
             & LexA.assemble
-            & LexSI.process
+            & LexI.process
             & S.toList
             & execErr
       pure $ T.concat
