@@ -3,7 +3,6 @@ module Language.CCS.Lexer.NoiseReduction
   , Token(..)
   , StrToken(..)
   , PunctuationType(..)
-  , annotation
   , pipeline
   , DeleteComment(..)
   , RaiseIllegalBytes(..)
@@ -12,6 +11,7 @@ module Language.CCS.Lexer.NoiseReduction
 
 import Control.Monad (when)
 import Data.Function ((&))
+import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError)
 import Language.CCS.Lexer.Morpheme (EolType(..))
 import Language.Location (Span)
@@ -41,16 +41,16 @@ deriving instance Show StrToken
 deriving instance Show PunctuationType
 deriving instance Eq PunctuationType
 
-annotation :: Token -> Span
-annotation (Symbol a) = a.span
-annotation (Number a _ _ _ _ _) = a
-annotation (Str a _ _ _) = a
-annotation (MlDelim a) = a.span
-annotation (MlContent a) = a.span
-annotation (MlClose a) = a
-annotation (Punctuation a _) = a
-annotation (Whitespace a) = a.span
-annotation (Eol a _) = a
+instance HasField "span" Token Span where
+  getField (Symbol a) = a.span
+  getField (Number a _ _ _ _ _) = a
+  getField (Str a _ _ _) = a
+  getField (MlDelim a) = a.span
+  getField (MlContent a) = a.span
+  getField (MlClose a) = a
+  getField (Punctuation a _) = a
+  getField (Whitespace a) = a.span
+  getField (Eol a _) = a
 
 $(pure [])
 [defpass|(from L0:CCS to CCS)|]

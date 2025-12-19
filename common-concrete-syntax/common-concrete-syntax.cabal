@@ -26,7 +26,6 @@ library
     exposed-modules:
       Language.CCS.Error
       Language.CCS.Lexer.Assemble
-      Language.CCS.Lexer.Line
       Language.CCS.Lexer.Morpheme
       Language.CCS.Lexer.NoiseReduction
       Language.CCS.Lexer.Pipeline

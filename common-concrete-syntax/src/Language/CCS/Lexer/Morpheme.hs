@@ -2,7 +2,6 @@ module Language.CCS.Lexer.Morpheme
   ( CCS(..)
   , Token(..)
   , StrToken(..)
-  , annotation
   , PunctuationType(..)
   , BracketType(..)
   , Sign(..)
@@ -65,18 +64,18 @@ deriving instance Show StrToken
 deriving instance Show PunctuationType
 deriving instance Eq PunctuationType
 
-annotation :: Token -> Span
-annotation (Symbol a) = a.span
-annotation (Number a _ _ _ _ _) = a
-annotation (Str a _ _ _) = a
-annotation (MlDelim a) = a.span
-annotation (MlContent a) = a.span
-annotation (MlClose a) = a
-annotation (Punctuation a _) = a
-annotation (Eol a _) = a
-annotation (Whitespace a) = a.span
-annotation (Comment a) = a.span
-annotation (Illegal a) = a.span
+instance HasField "span" Token Span where
+  getField (Symbol a) = a.span
+  getField (Number a _ _ _ _ _) = a
+  getField (Str a _ _ _) = a
+  getField (MlDelim a) = a.span
+  getField (MlContent a) = a.span
+  getField (MlClose a) = a
+  getField (Punctuation a _) = a
+  getField (Eol a _) = a
+  getField (Whitespace a) = a.span
+  getField (Comment a) = a.span
+  getField (Illegal a) = a.span
 
 data BracketType = Round | Square | Curly
   deriving (Eq, Show)

@@ -4,7 +4,6 @@ module Language.CCS.Lexer.Assemble
   , StrLit(..)
   , StringType(..)
   , PunctuationType(..)
-  , annotation
   , assemble
   , MalformedPunctuation(..)
   , MalformedNumber(..)
@@ -15,6 +14,7 @@ import Prelude hiding (lines, exp)
 
 import Control.Monad (when)
 import Data.Text (Text)
+import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unwrapOrPanic_)
 import Language.CCS.Lexer.Morpheme (QuoteType(..), Sign, Radix(..))
 import Language.Location (Pos, Span, spanFromPos, mkSpan)
@@ -87,15 +87,15 @@ data StringType
 deriving instance Show Token
 deriving instance Show PunctuationType
 
-annotation :: Token -> Span
-annotation (Symbol a) = a.span
-annotation (Punctuation a _) = a
-annotation (Whitespace a) = a.span
-annotation (Eol a _) = a
-annotation (IntegerLiteral a _) = a
-annotation (FloatingLiteral a _) = a
-annotation (StringLiteral a _) = a
-annotation (MultilineLiteral a _ _) = a
+instance HasField "span" Token Span where
+  getField (Symbol a) = a.span
+  getField (Punctuation a _) = a
+  getField (Whitespace a) = a.span
+  getField (Eol a _) = a
+  getField (IntegerLiteral a _) = a
+  getField (FloatingLiteral a _) = a
+  getField (StringLiteral a _) = a
+  getField (MultilineLiteral a _ _) = a
 
 $(pure [])
 

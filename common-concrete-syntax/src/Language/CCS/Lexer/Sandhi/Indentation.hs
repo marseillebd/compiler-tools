@@ -1,7 +1,6 @@
 module Language.CCS.Lexer.Sandhi.Indentation
   ( CCS(..)
   , Token(..)
-  , annotation
   , process
   , MalformedIndentation(..)
   ) where
@@ -11,6 +10,7 @@ import Prelude hiding (lines, init)
 import Control.Applicative ((<|>))
 import Control.Monad (forM, when, unless, replicateM_, void)
 import Data.Text (Text)
+import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unwrapOrPanic_)
 import Language.Location (incCol, Span, mkSpan, spanFromPos)
 import Language.Nanopass (deflang, defpass)
@@ -41,17 +41,17 @@ import qualified Streaming.Prelude as S
 deriving instance Show Token
 deriving instance Show PunctuationType
 
-annotation :: Token -> Span
-annotation (Symbol a) = a.span
-annotation (Punctuation a _) = a
-annotation (Whitespace a) = a.span
-annotation (Indent a) = a
-annotation (Nextline a) = a
-annotation (Dedent a) = a
-annotation (IntegerLiteral a _) = a
-annotation (FloatingLiteral a _) = a
-annotation (StringLiteral a _) = a
-annotation (MultilineLiteral a _) = a
+instance HasField "span" Token Span where
+  getField (Symbol a) = a.span
+  getField (Punctuation a _) = a
+  getField (Whitespace a) = a.span
+  getField (Indent a) = a
+  getField (Nextline a) = a
+  getField (Dedent a) = a
+  getField (IntegerLiteral a _) = a
+  getField (FloatingLiteral a _) = a
+  getField (StringLiteral a _) = a
+  getField (MultilineLiteral a _) = a
 
 $(pure [])
 
@@ -95,7 +95,7 @@ detectIndentation st inp0 = S.effect $ S.next inp0 >>= \case
       detectIndentation (newLvl, snd st) rest
     Right (L0.Eol _ _, _) -> internalError "found eol at start of file"
     Right (other, inp2) -> pure $ do
-      let ws = Src.fromPos (L0.annotation other).start ""
+      let ws = Src.fromPos other.span.start ""
           rest = yield other >> inp2
       newLvl <- S.effect $ analyzeIndent st ws
       detectIndentation (newLvl, snd st) rest
@@ -186,7 +186,7 @@ findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
     Right (other, rest) -> do
       other' <- xlate unknownIndent other
       pure $ do
-        yield $ Nextline (spanFromPos (L0.annotation other).start)
+        yield $ Nextline (spanFromPos other.span.start)
         yield other'
         findFirstIndented rest
   -- base cases
