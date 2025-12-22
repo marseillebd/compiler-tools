@@ -64,12 +64,14 @@ Whitespace 31:10--31:11 " "
 MultilineLiteral 31:11--34:8 [32:5--32:10 "hello",33:5--33:12 "  world"]
 Dedent 36:1--36:1
 Dedent 36:1--36:1
+Nextline 36:1--36:1
 Symbol 36:1--36:10 "something"
 Indent 37:1--37:3
 MultilineLiteral 37:3--38:14 []
 Nextline 39:1--39:3
 MultilineLiteral 39:3--40:19 []
 Dedent 42:1--42:1
+Nextline 42:1--42:1
 Symbol 42:1--42:2 "g"
 Whitespace 42:2--42:3 " "
 Punctuation 42:3--42:4 Dot

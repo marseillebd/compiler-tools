@@ -135,6 +135,7 @@ analyzeIndent (lvl, ty) ws = do
     | newLvl < lvl -> do
       replicateM_ (lvl - newLvl) $ do
         yield $ Dedent indent.span
+      yield $ Nextline indent.span
       pure newLvl
     | otherwise -> -- indent deeper than n + 1
       internalError "length of leading tabs is not le, eq, or one more than current tab state"
