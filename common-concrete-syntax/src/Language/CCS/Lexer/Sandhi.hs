@@ -106,9 +106,11 @@ process = mapWithLookaround $ \(prev, here, next) -> case here of
       pure $ addChain [xlate here]
     L0.Close _ -> pure [xlate here]
     L0.Dot ->
-      if | isAtom ViewFromRight prev && isClose prev, isAtom ViewFromLeft next
+      if | isAtom ViewFromRight prev || isClose prev
+         , isAtom ViewFromLeft next
           -> pure [Punctuation spn Chain]
-         | isSpace prev && isSpace next
+         | isSpace prev
+         , isSpace next
           -> pure [xlate here]
          | otherwise -> do
           raiseUnexpectedDot here.span

@@ -11,4 +11,9 @@ else
   today="$(date -I)"
 fi
 
-exec $EDITOR "NOTES/logbook/${today}.md"
+f="NOTES/logbook/${today}.md"
+if [[ ! -e "$f" ]]; then
+  touch "$f"
+  git add "$f"
+fi
+exec $EDITOR "$f"

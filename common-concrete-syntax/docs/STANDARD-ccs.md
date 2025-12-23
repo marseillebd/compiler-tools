@@ -437,7 +437,8 @@ Note that some listed tokens (comment, indentation) cannot appear in the content
 | name                    | regex                              | notes |
 |-------------------------|------------------------------------|-------|
 | enclosing punctuation   | `[()[\]{}]`                        |       |
-| separating punctuation  | `[,;]|\.+|:+`                      |       |
+| separating punctuation  | `[,;]`                             |       |
+| joining punctuation     | `\.+|:+`                           |       |
 | whitespace              | `[ ]+`                             |       |
 | indentation             | `^[ \t]+`                          |       |
 | comment                 | `#.*`                              |       |
@@ -530,37 +531,36 @@ TODO we join the tokenized lines together like so:
 
 ### Tokens in Context
 
-punctuation(open|close|list|chain)
-space = whitespace, indentation, start/end of stream
-atom(number|symbol|string)
-except string templates are atoms from one size and open/close from another
-
 TODO
-- atoms are symbols, numbers, and strings (incl multiline)
-- string templates are unusual:
+- atoms are symbols, numbers, and strings (incl multiline, but not templates)
+- "space" includes whitespace, indent, nextline, dedent, and beginning/end of token stream
+- string templates are treated as open/close:
     - they are not punctuation, but they are open/close when viewed from the inside
     - when viewed from the outside, they are ordinary atoms
 - atoms cannot appear adjacent to each other
+    - an atom cannot appear directly before an open string template
+    - nor directly after a close string template
+    - (so the template as a whole acts as an atom to its surroundings)
+- dots and colons cannot appear in sequences longer than three
+- MAYBE: two/three dots/colons are symbols and therefore treated as atoms
 - a "chain" is a sequence of things that look like member access, function call, array subscript, and so on
-- an "implicit chain" aka "subscript" token is inserted between
-    - an atom followed by open punctuation
-    - open punctuation followed by open punctuation
-- a "chain" aka "access" token is a single dot sandwiched between
-    - two atoms
-    - close punctuation and an atom
-    - ? an atom and open punctuation
-    - ? open punctuation and open punctuation
-- a single colon can be
-    - a "pairing" token when there is whitespace on the right
-    - a "block marker" when it is at the end of a line
-    - a "qualifier" token when sandwiched between
-        - ?? two symbols
-        - ? a symbol and a literal
-- other colons and dots, up to a length of three, are symbols
-    - ? including single dot
-    - ? including single colon
-    - subject to the rule that atoms cannot be adjacent
-- colons/dots with a length over three are illegal
+  - a chainer is inserted where there is either an atom or close punctuation on the left and an open punctuation on the right
+  - a dot is a chainer when it has either an atom or close punctuation on the left and an atom on the right
+  - (so far we have the following sorts of chains: `a.b`, `().b`, `f()`, `f()[i]`)
+  - MAYBE: a dot with space on both sides is a symbol, and therefore treated as an atom
+  - other single dots are illegal
+- a single colon can have several meanings:
+  - at the end of a line, it is a "block-marker"
+  - it indicates pairing when it's between a non-space and whitespace
+  - between a symbol and an atom, it's a "qualifier"
+  - MAYBE: surrounded by spaces, it is a symbol, and thus treated as an atom
+  - other single colons are illegal
+- comma and semicolon should be followed by space (but the standard promises to never make their meaning dependent on the following token)
+  - CCS source SHOULD have all comma/semicolon tokens followed by space.
+    CCS systems MAY accept comma/semicolon without following space, but NUST NOT interpret it differently from if it had been followed by space.
+- a backslash may only appear before an indent
+- indented blocks can only appear after a "block-marker" colon, an open punctuation, or a backslash
+
 
 Serialization
 =============
