@@ -15,7 +15,7 @@ import Prelude hiding (lines, exp)
 import Control.Monad (when)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError)
+import Language.CCS.Error (internalError, unused)
 import Language.CCS.Lexer.Morpheme (QuoteType(..), Sign, Radix(..))
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
@@ -99,6 +99,10 @@ instance HasField "span" Token Span where
 $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
+
+_ignore :: ()
+_ignore = unused (XlateI, descendTokenI, descendPunctuationTypeI)
+
 
 xlate :: (MalformedPunctuation m, MalformedNumber m, MalformedString m)
   => L0.Token -> m Token

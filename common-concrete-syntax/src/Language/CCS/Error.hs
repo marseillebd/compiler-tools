@@ -3,6 +3,7 @@ module Language.CCS.Error
   , unimplemented
   , internalError
   , Unwrap(..)
+  , unused
   ) where
 
 placeholder :: a -> a
@@ -23,6 +24,11 @@ internalError msg = error $ unlines
   url :: String
   url = "https://github.com/marseillebd/compiler-tools" -- NOTE be sure to update this url
 
+-- | Use like `_ignore = unused (foo, bar)` at top-level to opt-out of warnings about `foo` and `bar` being unused.
+--
+unused :: a -> ()
+unused _ = ()
+
 class Unwrap f where
   unwrapOr :: a -> f a -> a
   -- TODO should the *OrPanic* functions have warnings associated with them?
@@ -33,3 +39,4 @@ class Unwrap f where
 
 instance Unwrap Maybe where
   unwrapOr x = maybe x id
+

@@ -10,7 +10,7 @@ import Prelude hiding (lines, init)
 
 import Control.Monad (when, unless)
 import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError)
+import Language.CCS.Error (internalError, unused)
 import Language.CCS.Lexer.Assemble (TemplateType(..))
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
@@ -54,6 +54,9 @@ $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
+_ignore :: ()
+_ignore = unused (descendAtomI, descendPunctuationTypeI)
+
 xlate :: L0.Token -> Token
 xlate = descendTokenI XlateI
   { onAtomI = const Nothing
@@ -67,12 +70,12 @@ xlate = descendTokenI XlateI
     _ -> Nothing
   , onPunctuationTypeI = const Nothing
   , onTokenWhitespaceI = \_ -> internalError "attempt to xlate Whitespace to next lexing stage"
-  , onPunctuationTypeDotI = Open $ internalError "attempt to xlate Dot to next lexing stage"
-  , onPunctuationTypeDots2I = Open $ internalError "attempt to xlate Dots2 to next lexing stage"
-  , onPunctuationTypeDots3I = Open $ internalError "attempt to xlate Dots3 to next lexing stage"
-  , onPunctuationTypeColonI = Open $ internalError "attempt to xlate Colon to next lexing stage"
-  , onPunctuationTypeColons2I = Open $ internalError "attempt to xlate Colons2 to next lexing stage"
-  , onPunctuationTypeColons3I = Open $ internalError "attempt to xlate Colons3 to next lexing stage"
+  , onPunctuationTypeDotI = internalError "attempt to xlate Dot to next lexing stage"
+  , onPunctuationTypeDots2I = internalError "attempt to xlate Dots2 to next lexing stage"
+  , onPunctuationTypeDots3I = internalError "attempt to xlate Dots3 to next lexing stage"
+  , onPunctuationTypeColonI = internalError "attempt to xlate Colon to next lexing stage"
+  , onPunctuationTypeColons2I = internalError "attempt to xlate Colons2 to next lexing stage"
+  , onPunctuationTypeColons3I = internalError "attempt to xlate Colons3 to next lexing stage"
   , onPunctuationTypeBackslashI = ContinueLine
   }
 

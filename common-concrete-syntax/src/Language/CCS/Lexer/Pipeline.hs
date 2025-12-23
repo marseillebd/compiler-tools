@@ -18,7 +18,7 @@ import Language.CCS.Lexer.Morpheme (PunctuationType(..), BracketType(..))
 import Language.CCS.Lexer.Morpheme (QuoteType(..), EolType(..))
 import Language.CCS.Lexer.Morpheme (Sign(..), Radix(..))
 import Language.CCS.Lexer.Morpheme (Token(..), StrToken(..))
-import Language.Location (mkSpan, spanFromPos, Pos, startPos, incLine, incCol)
+import Language.Location (mkSpan, spanFromPos, Pos, startPos, incLine)
 import Language.Text (SrcText)
 
 import qualified Data.ByteString.Lazy as LBS
@@ -36,10 +36,6 @@ pipelineFrom pos0 bytes = bytes
   & decode
   & linesFrom pos0
   & lexLines
-
--- NOTE should this helper be here?
-advInLine :: Pos -> Text -> Pos
-advInLine pos str = T.foldl' (\p _ -> incCol p) pos str
 
 --------------------
 ------ Decode ------
@@ -125,22 +121,6 @@ lexLine (TqLex delim) src0 = case Src.runParse src0 lexDelim of
   drain revacc src = case lexAfterMlDelim src of
     Just (tok, rest) -> drain (tok : revacc) rest
     Nothing -> (reverse revacc, StdLex)
-
-lexTq :: Text -> SrcText -> Maybe (Token, SrcText)
-lexTq _ src | Src.null src = Nothing
-lexTq delim src = case Src.runParse src parser of
-  Just (_, tok, rest) -> Just (tok, rest)
-  Nothing -> internalError "coverage token parsing failed somehow"
-  where
-  parser
-     =  do
-        _ <- Src.takeWhile (`T.elem` " \t")
-        _ <- Src.takePrefix delim
-        delim' <- Src.consumed
-        pure $ MlDelim delim'
-    <|> do
-        _ <- Src.takeAll
-        MlContent <$> Src.consumed
 
 lexStd :: SrcText -> Maybe (Token, SrcText)
 lexStd src | Src.null src = Nothing
@@ -563,27 +543,3 @@ parseHex str0 = loop 0 str0
     | 'a' <= c && c <= 'f' = loop (acc * 16 + (fromIntegral $ ord c - ord 'a' + 10)) cs
     | 'A' <= c && c <= 'F' = loop (acc * 16 + (fromIntegral $ ord c - ord 'A' + 10)) cs
     | otherwise = Nothing
-
--------------------------
------- Linear Data ------
--------------------------
-
--- TODO this is really more of a Streaming.Pure module
-
-data Linear a z
-  = More a (Linear a z)
-  | Done z
-
-deriving instance Functor (Linear a)
-
-instance Applicative (Linear a) where
-  pure = Done
-  (More _ xs) <*> ys = xs <*> ys
-  (Done f) <*> ys = f <$> ys
-instance Monad (Linear a) where
-  (More x xs) >>= k = More x (xs >>= k)
-  (Done z) >>= k = k z
-
-runLinear :: Linear a z -> [a]
-runLinear (More x xs) = x : runLinear xs
-runLinear (Done _) = []

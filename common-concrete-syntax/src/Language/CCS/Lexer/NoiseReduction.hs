@@ -12,7 +12,7 @@ module Language.CCS.Lexer.NoiseReduction
 import Control.Monad (when)
 import Data.Function ((&))
 import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError)
+import Language.CCS.Error (internalError, unused)
 import Language.CCS.Lexer.Morpheme (EolType(..))
 import Language.Location (Span)
 import Language.Nanopass (deflang, defpass)
@@ -54,6 +54,9 @@ instance HasField "span" Token Span where
 
 $(pure [])
 [defpass|(from L0:CCS to CCS)|]
+
+_ignore :: ()
+_ignore = unused (XlateI, descendTokenI, descendStrTokenI, descendPunctuationTypeI)
 
 xlate :: RaiseIllegalBytes m => Xlate m
 xlate = Xlate

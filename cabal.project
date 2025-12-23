@@ -2,3 +2,8 @@ packages: */*.cabal
 
 allow-newer:
   sexpr-parser:megaparsec
+
+source-repository-package
+  type: git
+  location: https://github.com/marseillebd/nanopass.git
+  tag: 7a021eb6a17b07bb944d82b3c2d543c2fcea817b

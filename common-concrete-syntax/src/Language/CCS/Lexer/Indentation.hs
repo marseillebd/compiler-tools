@@ -13,7 +13,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (forM, unless, replicateM_, void)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unwrapOrPanic_)
+import Language.CCS.Error (internalError, unused, unwrapOrPanic_)
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
@@ -58,6 +58,9 @@ instance HasField "span" Token Span where
 $(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
+
+_ignore :: ()
+_ignore = unused (XlateI, descendAtomI, descendTokenI, descendPunctuationTypeI)
 
 xlate :: MalformedIndentation m => IndentState -> L0.Token -> m Token
 xlate st = descendToken Xlate
