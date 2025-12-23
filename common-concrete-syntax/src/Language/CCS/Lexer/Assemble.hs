@@ -1,8 +1,8 @@
 module Language.CCS.Lexer.Assemble
   ( CCS(..)
+  , Atom(..)
   , Token(..)
-  , StrLit(..)
-  , StringType(..)
+  , TemplateType(..)
   , PunctuationType(..)
   , assemble
   , MalformedPunctuation(..)
@@ -31,17 +31,25 @@ import qualified Streaming.Prelude as S
 
 [deflang|
 (CCS from L0:CCS
-  (* Token
-    (- Number)
-    (+ IntegerLiteral Span IntLit)
-    (+ FloatingLiteral Span FloLit)
+  (+ Atom
+    (Symbol Text)
+    (IntegerLiteral IntLit)
+    (FloatingLiteral FloLit)
+    (StringLiteral Text)
+    (MultilineLiteral (* SrcText) SrcText)
+  )
 
+  (* Token
+    (- Symbol)
+    (- Number)
     (- Str)
-    (+ StringLiteral Span StrLit)
+
     (- MlDelim)
     (- MlContent)
     (- MlClose)
-    (+ MultilineLiteral Span (* SrcText) SrcText)
+
+    (+ Atom Span Atom)
+    (+ StringTemplate Span TemplateType Text)
   )
 
   (- StrToken)
@@ -71,31 +79,22 @@ data FloLit
     }
   deriving (Eq, Show)
 
-data StrLit = StrLit
-  { strTy :: StringType
-  , strContent :: Text
-  }
-  deriving (Show)
-
-data StringType
-  = StrLiteral
-  | OpenTemplate
+data TemplateType
+  = OpenTemplate
   | MidTemplate
   | CloseTemplate
   deriving (Show)
 
+deriving instance Show Atom
 deriving instance Show Token
 deriving instance Show PunctuationType
 
 instance HasField "span" Token Span where
-  getField (Symbol a) = a.span
+  getField (Atom a _) = a
   getField (Punctuation a _) = a
   getField (Whitespace a) = a.span
   getField (Eol a _) = a
-  getField (IntegerLiteral a _) = a
-  getField (FloatingLiteral a _) = a
-  getField (StringLiteral a _) = a
-  getField (MultilineLiteral a _ _) = a
+  getField (StringTemplate a _ _) = a
 
 $(pure [])
 
@@ -111,6 +110,7 @@ xlate = descendToken Xlate
   , onTokenStr = stdStr
   , onPunctuationType = const Nothing
   , onTokenNumber = number
+  , onTokenSymbol = \sym -> pure $ Atom sym.span (Symbol sym.text)
   , onTokenMlDelim = \_ -> internalError "attempt to translate MlDelim token to next lexing stage"
   , onTokenMlContent = \_ -> internalError "attempt to translate MlContent token to next lexing stage"
   , onTokenMlClose = \_ -> internalError "attempt to translate MlClose token to next lexing stage"
@@ -186,7 +186,7 @@ number
   -> m Token
 -- integer literal
 number loc sign _ i Nothing Nothing = pure $
-  IntegerLiteral loc $ IntLit
+  Atom loc $ IntegerLiteral IntLit
     { signI = sign
     , magI = i
     }
@@ -194,7 +194,7 @@ number loc sign _ i Nothing Nothing = pure $
 number loc sign radix whole (Just (frac, len)) Nothing = do
   when (len == 0) $
     raiseExpectingFractionalDigits loc
-  pure $ FloatingLiteral loc $ FloLit
+  pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole * (radix.base ^ len) + frac
     , expF = (radix, negate $ fromIntegral len)
@@ -203,7 +203,7 @@ number loc sign radix whole (Just (frac, len)) Nothing = do
 number loc sign radix whole (Just (frac, len)) (Just exp) = do
   when (len == 0) $
     raiseExpectingFractionalDigits loc
-  pure $ FloatingLiteral loc $ FloLit
+  pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole * (radix.base ^ len) + frac
     , expF = (radix, exp - fromIntegral len)
@@ -211,7 +211,7 @@ number loc sign radix whole (Just (frac, len)) (Just exp) = do
 -- BAD: integer with exponent
 number loc sign radix whole Nothing (Just exp) = do
   raiseUnexpectedExponent loc
-  pure $ FloatingLiteral loc $ FloLit
+  pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole
     , expF = (radix, exp)
@@ -231,21 +231,24 @@ stdStr loc open parts closeM = do
   case closeM of
     Just _ -> pure ()
     Nothing -> raiseExpectingCloseQuote (spanFromPos loc.start)
-  let lit = StrLit
-        { strTy = mkStrType open closeM
-        , strContent = T.concat $ flip map parts $ \case
+  let content = T.concat $ flip map parts $ \case
           L0.StdStr part -> part.text
           L0.StrEscape _ c -> T.singleton c
-        }
-  pure $ StringLiteral loc lit
+  pure $ case mkStrType open closeM of
+    Nothing -> Atom loc (StringLiteral content)
+    Just templTy -> StringTemplate loc templTy content
 
-mkStrType :: QuoteType -> Maybe QuoteType -> StringType
-mkStrType SqlQuote _ = StrLiteral
-mkStrType DblQuote (Just Backtick) = OpenTemplate
-mkStrType DblQuote _ = StrLiteral
-mkStrType Backtick (Just Backtick) = MidTemplate
-mkStrType Backtick _ = CloseTemplate
+mkStrType :: QuoteType -> Maybe QuoteType -> Maybe TemplateType
+mkStrType DblQuote (Just DblQuote) = Nothing
+mkStrType DblQuote Nothing = Nothing
+mkStrType DblQuote (Just Backtick) = Just OpenTemplate
+mkStrType Backtick (Just Backtick) = Just MidTemplate
+mkStrType Backtick (Just DblQuote) = Just CloseTemplate
+mkStrType Backtick Nothing = Just CloseTemplate
+mkStrType SqlQuote _ = Nothing
+mkStrType _ (Just SqlQuote) = internalError "sqlquote ends non-sqlquoted string"
 mkStrType (MlQuote _) _ = internalError "mkStrType called on an MlQuote"
+mkStrType _ (Just (MlQuote _)) = internalError "mkStrType called on an MlQuote"
 
 -------------------------------
 ------ Multiline Strings ------
@@ -275,7 +278,7 @@ mlMode st inp0 = S.next inp0 >>= \case
     mlMode st' rest
 -- DONE: ends at close without indent
   Right (L0.MlClose l, rest) -> do
-    let tok = MultilineLiteral spn lines lastIndent
+    let tok = Atom spn $ MultilineLiteral lines lastIndent
         lines = reverse st.mlLinesReverse
         lastIndent = Src.fromPos st.mlSpan.end ""
         spn = st.mlSpan <> l
@@ -283,14 +286,14 @@ mlMode st inp0 = S.next inp0 >>= \case
   Right (L0.Whitespace lastIndent, inp1) -> S.next inp1 >>= \case
 -- DONE: ends at close with indent
     Right (L0.MlClose l, rest) -> do
-      let tok = MultilineLiteral spn lines lastIndent
+      let tok = Atom spn $ MultilineLiteral lines lastIndent
           spn = st.mlSpan <> l
           lines = reverse st.mlLinesReverse
       pure (tok, rest)
 -- BAD: ends at end of file (with indent)
     Left r -> do
       raiseExpectingCloseQuote $ spanFromPos lastIndent.span.end
-      let tok = MultilineLiteral spn lines lastIndent
+      let tok = Atom spn $ MultilineLiteral lines lastIndent
           lines = reverse st.mlLinesReverse
           spn = st.mlSpan <> lastIndent.span
       pure (tok, pure r)
@@ -300,7 +303,7 @@ mlMode st inp0 = S.next inp0 >>= \case
 -- BAD ends at end of file (without indent)
   Left r -> do
     raiseExpectingCloseQuote $ spanFromPos st.mlSpan.end
-    let tok = MultilineLiteral st.mlSpan lines lastIndent
+    let tok = Atom st.mlSpan $ MultilineLiteral lines lastIndent
         lines = reverse st.mlLinesReverse
         lastIndent = Src.fromPos st.mlSpan.end ""
     pure (tok, pure r)

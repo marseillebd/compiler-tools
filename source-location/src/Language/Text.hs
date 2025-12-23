@@ -3,6 +3,7 @@
 module Language.Text
   ( SrcText
   , fromPos
+  , fromSpan
   , null
   , Parse
   , runParse
@@ -46,6 +47,9 @@ fromPos p text = SrcText
   { _span = fromJust $ mkSpan p (p `advText` text)
   , _text = text
   }
+
+fromSpan :: Span -> Text -> SrcText
+fromSpan = SrcText
 
 null :: SrcText -> Bool
 null = T.null . _text

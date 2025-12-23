@@ -33,7 +33,7 @@ def foo():
       world
     """
 
-something
+something \
   """BADtoofew
  """BADtoofew
   """BADtoomany

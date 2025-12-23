@@ -12,14 +12,16 @@ import Test.Tasty.Golden (goldenVsFile)
 import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
 import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
 import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
+import Language.CCS.Lexer.Sandhi (SandhiError(..))
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.CCS.Lexer.Assemble as LexA
+import qualified Language.CCS.Lexer.Indentation as LexI
 import qualified Language.CCS.Lexer.NoiseReduction as LexNR
 import qualified Language.CCS.Lexer.Pipeline as Morpheme
-import qualified Language.CCS.Lexer.Indentation as LexI
+import qualified Language.CCS.Lexer.Sandhi as LexS
 import qualified Streaming.Prelude as S
 
 main :: IO ()
@@ -43,6 +45,7 @@ main = defaultMain $ testGroup "Tests"
             & LexNR.pipeline
             & LexA.assemble
             & LexI.process
+            & LexS.process
             & S.toList
             & execErr
       pure $ T.concat
@@ -125,3 +128,18 @@ instance MalformedIndentation Err where
     [ "InsufficientIndentation: ", show l ]
   raiseLeadingWhitespace l = addErr $ concat
     [ "LeadingWhitespace: ", show l ]
+instance SandhiError Err where
+  raiseCrammedTokens l = addErr $ concat
+    [ "CrammedTokens: ", show l]
+  raiseExpectedWhitespace l = addErr $ concat
+    [ "ExpectedWhitespace: ", show l]
+  raiseUnexpectedIndent l = addErr $ concat
+    [ "UnexpectedIndent: ", show l]
+  raiseUnexpectedWhitespace l = addErr $ concat
+    [ "UnexpectedWhitespace: ", show l]
+  raiseUnexpectedDot l = addErr $ concat
+    [ "UnexpectedDot: ", show l]
+  raiseUnexpectedColon l = addErr $ concat
+    [ "UnexpectedColon: ", show l]
+  raiseUnexpectedBackslash l = addErr $ concat
+    [ "UnexpectedBackslash: ", show l]

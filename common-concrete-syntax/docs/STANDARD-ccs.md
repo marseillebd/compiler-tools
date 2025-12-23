@@ -530,9 +530,18 @@ TODO we join the tokenized lines together like so:
 
 ### Tokens in Context
 
+punctuation(open|close|list|chain)
+space = whitespace, indentation, start/end of stream
+atom(number|symbol|string)
+except string templates are atoms from one size and open/close from another
+
 TODO
 - atoms are symbols, numbers, and strings (incl multiline)
+- string templates are unusual:
+    - they are not punctuation, but they are open/close when viewed from the inside
+    - when viewed from the outside, they are ordinary atoms
 - atoms cannot appear adjacent to each other
+- a "chain" is a sequence of things that look like member access, function call, array subscript, and so on
 - an "implicit chain" aka "subscript" token is inserted between
     - an atom followed by open punctuation
     - open punctuation followed by open punctuation

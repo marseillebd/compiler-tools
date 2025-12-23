@@ -1,5 +1,6 @@
 module Language.CCS.Lexer.Indentation
   ( CCS(..)
+  , Atom(..)
   , Token(..)
   , PunctuationType(..)
   , process
@@ -27,32 +28,32 @@ import qualified Streaming.Prelude as S
 
 [deflang|
 (CCS from L0:CCS
+  (* Atom
+    (- MultilineLiteral)
+    (+ MultilineLiteral (* SrcText))
+  )
+
   (* Token
     (- Eol)
     (+ Indent Span)
     (+ Nextline Span)
     (+ Dedent Span)
-
-    (- MultilineLiteral)
-    (+ MultilineLiteral Span (* SrcText))
   )
 )
 |]
 
+deriving instance Show Atom
 deriving instance Show Token
 deriving instance Show PunctuationType
 
 instance HasField "span" Token Span where
-  getField (Symbol a) = a.span
+  getField (Atom a _) = a
+  getField (StringTemplate a _ _) = a
   getField (Punctuation a _) = a
   getField (Whitespace a) = a.span
   getField (Indent a) = a
   getField (Nextline a) = a
   getField (Dedent a) = a
-  getField (IntegerLiteral a _) = a
-  getField (FloatingLiteral a _) = a
-  getField (StringLiteral a _) = a
-  getField (MultilineLiteral a _) = a
 
 $(pure [])
 
@@ -60,10 +61,11 @@ $(pure [])
 
 xlate :: MalformedIndentation m => IndentState -> L0.Token -> m Token
 xlate st = descendToken Xlate
-  { onToken = const Nothing
+  { onAtom = const Nothing
+  , onToken = const Nothing
   , onPunctuationType = const Nothing
+  , onAtomMultilineLiteral = \body predelim -> xlateMl st body predelim
   , onTokenEol = \_ -> internalError "attempt to translate Eol to next lexing stage"
-  , onTokenMultilineLiteral = \loc body predelim -> xlateMl st loc body predelim
   }
 
 ------------------
@@ -218,20 +220,19 @@ getIndentType src = case Src.runParse src detect of
 xlateMl :: forall m.
   ( MalformedIndentation m )
   => IndentState
-  -> Span
   -> [SrcText]
   -> SrcText
-  -> m Token
-xlateMl (0, _) loc body predelim = do
+  -> m Atom
+xlateMl (0, _) body predelim = do
   unless (Src.null predelim) $
     raiseUnexpectedIndent predelim.span
-  pure $ MultilineLiteral loc body
-xlateMl st loc body predelim = do
+  pure $ MultilineLiteral body
+xlateMl st body predelim = do
   body' <- forM body stripIndent
   predelim' <- stripIndent predelim
   unless (Src.null predelim') $
     raiseLeadingWhitespace predelim'.span
-  pure $ MultilineLiteral loc body'
+  pure $ MultilineLiteral body'
   where
   stripIndent :: SrcText -> m SrcText
   stripIndent src = case indentStripper src of

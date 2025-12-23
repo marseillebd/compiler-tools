@@ -87,7 +87,9 @@ MlClose 34:5--34:8
 Eol 34:8--35:1 LF
 Eol 35:1--36:1 LF
 Symbol 36:1--36:10 "something"
-Eol 36:10--37:1 LF
+Whitespace 36:10--36:11 " "
+Punctuation 36:11--36:12 Backslash
+Eol 36:12--37:1 LF
 Whitespace 37:1--37:3 "  "
 MlDelim 37:3--37:15 "\"\"\"BADtoofew"
 Eol 37:15--38:1 LF
