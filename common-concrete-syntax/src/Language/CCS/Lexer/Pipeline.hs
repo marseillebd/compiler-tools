@@ -110,25 +110,29 @@ lexLine StdLex src0 = loop [] src0
   drain delim revacc src = case lexAfterMlDelim src of
     Just (tok, rest) -> drain delim (tok : revacc) rest
     Nothing -> (reverse revacc, TqLex delim)
-lexLine (TqLex delim) src0 = case Src.runParse src0 lexDelim of
-  Just (_, revacc, rest) -> drain revacc rest
+lexLine (TqLex delim) src0 = case Src.evalParse lexDelim src0 of
+  Just ((ws_m, delim'), rest) -> do
+    let acc0 = delim' : (maybe [] (:[]) ws_m)
+    drain acc0 rest
   Nothing -> ([MlContent src0], TqLex delim)
   where
+  lexDelim :: Src.Parse (Maybe Token, Token)
   lexDelim = do
-    ws <- Src.asSrc $ Src.takeWhile (`T.elem` " \t")
-    delim' <- Src.asSrc $ Src.takePrefix delim
-    pure $ MlClose delim'.span : (if Src.null ws then [] else [Whitespace ws])
+    ws <- Src.theConsumed $ Src.takeWhile (`T.elem` " \t")
+    delim' <- Src.theConsumed $ Src.takePrefix delim
+    let ws_m = if Src.null ws then Nothing else Just (Whitespace ws)
+    pure (ws_m, MlClose delim'.span)
   drain revacc src = case lexAfterMlDelim src of
     Just (tok, rest) -> drain (tok : revacc) rest
     Nothing -> (reverse revacc, StdLex)
 
 lexStd :: SrcText -> Maybe (Token, SrcText)
 lexStd src | Src.null src = Nothing
-lexStd src = case Src.runParse src parser of
-  Just (_, tok, rest) -> Just (tok, rest)
+lexStd src = case Src.evalParse parser src of
+  Just (tok, rest) -> Just (tok, rest)
   Nothing -> internalError "coverage token parsing failed somehow"
   where
-  parser = do
+  parser = Src.withConsumedK $ do
     c <- Src.sat (const True)
     case classify c of
     -- numbers and symbols
@@ -148,14 +152,12 @@ lexStd src = case Src.runParse src parser of
     -- punctuation
       Punct (Dots _) -> do
         _ <- Src.takeWhile (== '.')
-        dots <- Src.consumed
-        pure $ Punctuation dots.span (Dots $ T.length dots.text)
+        pure $ \dots -> Punctuation dots.span (Dots $ T.length dots.text)
       Punct (Colons _) -> do
         _ <- Src.takeWhile (== ':')
-        colons <- Src.consumed
-        pure $ Punctuation colons.span (Colons $ T.length colons.text)
+        pure $ \colons -> Punctuation colons.span (Colons $ T.length colons.text)
       Punct ty ->
-        Punctuation <$> (Src.consumed <&> (.span)) <*> pure ty
+        pure $ \p -> Punctuation (p.span) ty
     -- strings
       SQuote -> lexSqString
       DQuote -> do
@@ -169,21 +171,21 @@ lexStd src = case Src.runParse src parser of
     -- whitespace
       Lws -> do
         _ <- Src.takeWhile (`T.elem` " \t")
-        Whitespace <$> Src.consumed
+        pure Whitespace
       Hash -> do
         _ <- Src.takeAll
-        Comment <$> Src.consumed
+        pure Comment
     -- illegal tokens
       Ill -> do
         _ <- Src.takeWhile ((== Ill) . classify)
-        Illegal <$> Src.consumed
+        pure Illegal
 
 ------ Symbols ------
 
-lexSymbol :: Src.Parse Token
+lexSymbol :: Src.Parse (SrcText -> Token)
 lexSymbol = do
   _ <- Src.takeWhile isId
-  Symbol <$> Src.consumed
+  pure Symbol
   where
   isId c = case classify c of
     Id0 -> True
@@ -193,7 +195,7 @@ lexSymbol = do
 
 ------ Numbers ------
 
-lexNumber :: Sign -> Radix -> Text -> Src.Parse Token
+lexNumber :: Sign -> Radix -> Text -> Src.Parse (SrcText -> Token)
 lexNumber sign radix firstDigit = do
   -- integer part
   intDigits <- takeDigits radix firstDigit
@@ -216,8 +218,7 @@ lexNumber sign radix firstDigit = do
             Negative -> negate expMag
       pure $ Just expPart
     else pure Nothing
-  loc <- Src.consumed <&> (.span)
-  pure $ Number loc
+  pure $ \src -> Number src.span
     sign radix intPart
     fracPart exp
 
@@ -258,14 +259,13 @@ takeExpMarker _ = Src.tryN 1 $ \next ->
 
 --- SQL Strings ---
 
-lexSqString :: Src.Parse Token
+lexSqString :: Src.Parse (SrcText -> Token)
 lexSqString = do
   parts <- takeSqs
   closeQuote <- Src.tryN 1 $ \case
     "'" -> Right $ Just SqlQuote
     _ -> Left Nothing
-  loc <- Src.consumed <&> (.span)
-  pure $ Str loc SqlQuote parts closeQuote
+  pure $ \src -> Str src.span SqlQuote parts closeQuote
 
 takeSqs :: Src.Parse [StrToken]
 takeSqs = loop []
@@ -283,7 +283,7 @@ takeSq = Src.branch
 
 takeSqStd :: Src.Parse StrToken
 takeSqStd = do
-  src <- Src.asSrc $ Src.takeWhile1 (/= '\'')
+  src <- Src.theConsumed $ Src.takeWhile1 (/= '\'')
   pure $ StdStr src
 
 takeSqEsc :: Src.Parse StrToken
@@ -296,12 +296,11 @@ takeSqEsc = do
 
 --- Double-quoted Strings ---
 
-lexDqString :: QuoteType -> Src.Parse Token
+lexDqString :: QuoteType -> Src.Parse (SrcText -> Token)
 lexDqString openQuote = do
   parts <- takeDqs
   closeQuote <- takeQuote
-  loc <- Src.consumed <&> (.span)
-  pure $ Str loc openQuote parts closeQuote
+  pure $ \src -> Str src.span openQuote parts closeQuote
 
 takeQuote :: Src.Parse (Maybe QuoteType)
 takeQuote = Src.tryN 1 $ \case
@@ -326,7 +325,7 @@ takeDq = Src.branch
 
 takeDqStd :: Src.Parse StrToken
 takeDqStd = do
-  src <- Src.asSrc $ Src.takeWhile1 (not . (`T.elem` "\"`\\"))
+  src <- Src.theConsumed $ Src.takeWhile1 (not . (`T.elem` "\"`\\"))
   pure $ StdStr src
 
 takeDqEsc :: Src.Parse StrToken
@@ -388,35 +387,35 @@ takeDqIllegal = do
 
 --- Multi-line Strings ---
 
-lexTqStr :: Src.Parse Token
+lexTqStr :: Src.Parse (SrcText -> Token)
 lexTqStr = do
   -- we've already checked for three quotes before
   -- now take remaining quotes
   _ <- Src.takeWhile (== '\"')
   _ <- Src.takeWhile (\c -> 'A' <= c && c <= 'Z'
                       || 'a' <= c && c <= 'z')
-  MlDelim <$> Src.consumed
+  pure MlDelim
 
 lexAfterMlDelim :: SrcText -> Maybe (Token, SrcText)
 lexAfterMlDelim src | Src.null src = Nothing
-lexAfterMlDelim src = case Src.runParse src parser of
-  Just (_, tok, rest) -> Just (tok, rest)
+lexAfterMlDelim src = case Src.evalParse parser src of
+  Just (tok, rest) -> Just (tok, rest)
   Nothing -> internalError "coverage token parsing failed somehow"
   where
-  parser = do
+  parser = Src.withConsumedK $ do
     c <- Src.sat (const True)
     case classify c of
     -- whitespace
       Lws -> do
         _ <- Src.takeWhile (`T.elem` " \t")
-        Whitespace <$> Src.consumed
+        pure Whitespace
       Hash -> do
         _ <- Src.takeAll
-        Comment <$> Src.consumed
+        pure Comment
     -- everything else is illegal
       _ -> do
         _ <- Src.takeWhile (not . (`T.elem` " \t#"))
-        Illegal <$> Src.consumed
+        pure Illegal
 
 ----------------------------
 ------ DELME ------

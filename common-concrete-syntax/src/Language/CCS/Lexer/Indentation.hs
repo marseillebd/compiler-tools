@@ -123,11 +123,7 @@ analyzeIndent :: MalformedIndentation m
   -> SrcText
   -> m (Stream (Of Token) m Int)
 analyzeIndent (lvl, ty) ws = do
-  let takeOneLvl = case ty of
-        Spaces n -> void $ Src.takePrefix (T.replicate n " ")
-        Tab -> void $ Src.sat (== '\t')
-  let (indent, newLvl, rest) = unwrapOrPanic_ $ Src.runParse ws $
-        length <$> Src.manyN (lvl + 1) takeOneLvl
+  let ((indent, newLvl), rest) = unwrapOrPanic_ $ Src.evalParse parseIndent ws
   unless (Src.null rest) $ do
     raiseLeadingWhitespace rest.span
   pure $ if
@@ -144,6 +140,14 @@ analyzeIndent (lvl, ty) ws = do
       pure newLvl
     | otherwise -> -- indent deeper than n + 1
       internalError "length of leading tabs is not le, eq, or one more than current tab state"
+  where
+  parseIndent :: Src.Parse (SrcText, Int)
+  parseIndent = Src.withConsumed $ do
+    length <$> Src.manyN (lvl + 1) parseOneLvl
+  parseOneLvl :: Src.Parse ()
+  parseOneLvl = case ty of
+    Spaces n -> void $ Src.takePrefix (T.replicate n " ")
+    Tab -> void $ Src.sat (== '\t')
 
 ------ Initialization ------
 
@@ -208,12 +212,12 @@ findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
   Left r -> pure $ pure $ Left r
 
 getIndentType :: SrcText -> (SrcText, IndentType, SrcText)
-getIndentType src = case Src.runParse src detect of
-  Just (ok, ty, rest) -> (ok, ty, rest)
+getIndentType src = case Src.evalParse detect src of
+  Just ((ok, ty), rest) -> (ok, ty, rest)
   Nothing -> internalError "detecting indentation over empty string"
   where
-  detect
-     =  (Src.sat (== '\t') >> pure Tab)
+  detect = Src.withConsumed
+     $  (Src.sat (== '\t') >> pure Tab)
     <|> (Src.takeWhile1 (== ' ') >>= \it -> pure $ Spaces (T.length it))
 
 --------------------------------
@@ -238,17 +242,16 @@ xlateMl st body predelim = do
   pure $ MultilineLiteral body'
   where
   stripIndent :: SrcText -> m SrcText
-  stripIndent src = case indentStripper src of
-    Right (_, rest) -> pure rest
-    Left (tooLittle, rest) -> do
+  stripIndent src = case Src.evalParse parseIndent src of
+    Just (Right (), rest) -> pure rest
+    Just (Left tooLittle, rest) -> do
       raiseInsufficientIndentation tooLittle.span
       pure rest
-  indentStripper :: SrcText -> Either (SrcText, SrcText) (SrcText, SrcText)
-  indentStripper src = case Src.execParse src $
-    Src.takePrefix (indentString st) of
-      Just it -> Right it
-      Nothing -> Left $ unwrapOrPanic_ $ Src.execParse src $
-        Src.takeWhile (== (indentChar st))
+    Nothing -> internalError "xlateMl.stripIndent failed"
+  parseIndent :: Src.Parse (Either SrcText ())
+  parseIndent
+     = Right () <$ Src.takePrefix (indentString st)
+    <|> Left <$> Src.theConsumed (Src.takeWhile (== (indentChar st)))
 
 ---------------------
 ------ Helpers ------

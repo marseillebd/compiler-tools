@@ -3,17 +3,16 @@
 module Language.Text
   ( SrcText
   , fromPos
-  , fromSpan
   , null
   , Parse
-  , runParse
-  , execParse
+  , evalParse
+  , withConsumed
+  , theConsumed
+  , withConsumedK
   , withSpan
-  , asSrc
   , sat
   , look
   , tryN
-  , consumed
   , atEnd
   , take
   , takeWhile
@@ -27,6 +26,7 @@ module Language.Text
 import Prelude hiding (take, takeWhile, null)
 
 import Control.Applicative (Alternative(..))
+import Data.Bifunctor (Bifunctor(first))
 import Data.Maybe (fromJust)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
@@ -47,9 +47,6 @@ fromPos p text = SrcText
   { _span = fromJust $ mkSpan p (p `advText` text)
   , _text = text
   }
-
-fromSpan :: Span -> Text -> SrcText
-fromSpan = SrcText
 
 null :: SrcText -> Bool
 null = T.null . _text
@@ -95,11 +92,10 @@ instance Monad Parse where
     (st', x) <- unP getX st
     unP (k x) st'
 
-runParse :: SrcText -> Parse a -> Maybe (SrcText, a, SrcText)
-runParse src action = (unP action) st0 >>= \(st, x) -> do
-    locA <- mkSpan st.start st.mid
-    locB <- mkSpan st.mid st.end
-    pure (SrcText locA st.taken, x, SrcText locB st.rest)
+evalParse :: Parse a -> SrcText -> Maybe (a, SrcText)
+evalParse action src = (unP action) st0 >>= \(st, x) -> do
+  loc <- mkSpan st.mid st.end
+  pure (x, SrcText loc st.rest)
   where
   st0 = St
     { start = src.span.start
@@ -109,21 +105,25 @@ runParse src action = (unP action) st0 >>= \(st, x) -> do
     , end = src.span.end
     }
 
-execParse :: SrcText -> Parse a -> Maybe (SrcText, SrcText)
-execParse src p = do
-  (yes, _, remain) <- runParse src p
-  pure (yes, remain)
+withConsumed :: Parse a -> Parse (SrcText, a)
+withConsumed p = P $ \st -> do
+  let subSt = st{start = st.mid, taken = ""}
+  (subSt', x) <- unP p subSt
+  spn <- mkSpan subSt'.start subSt'.mid
+  let txt = subSt'.taken
+      st' = subSt'{start = st.start, taken = st.taken <> subSt'.taken}
+  pure (st', (SrcText spn txt, x))
+
+theConsumed :: Parse a -> Parse SrcText
+theConsumed p = fst <$> withConsumed p
+
+withConsumedK :: Parse (SrcText -> a) -> Parse a
+withConsumedK p = do
+  (src, f) <- withConsumed p
+  pure $ f src
 
 withSpan :: Parse a -> Parse (Span, a)
-withSpan p = P $ \st -> do
-  (st', txt) <- unP p st
-  let loc = fromJust $ mkSpan st.mid st'.mid
-  pure $ (st', (loc, txt))
-
-asSrc :: Parse Text -> Parse SrcText
-asSrc p = do
-  (loc, txt) <- withSpan p
-  pure $ SrcText loc txt
+withSpan p = first (.span) <$> withConsumed p
 
 -- ^ take one character from the input,
 -- fail if it does not satisfy the predicate or if the end is reached
@@ -146,11 +146,6 @@ tryN n f = do
   case f text of
     Left def -> pure def
     Right ok -> take n >> pure ok
-
-consumed :: Parse SrcText
-consumed = P $ \st ->
-  let x = SrcText (fromJust $ mkSpan st.start st.mid) st.taken
-   in Just (st, x)
 
 atEnd :: Parse Bool
 atEnd = P $ \st -> case st.rest of
