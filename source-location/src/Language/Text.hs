@@ -11,6 +11,7 @@ module Language.Text
   , withConsumedK
   , withSpan
   , sat
+  , peeks
   , look
   , tryN
   , atEnd
@@ -135,6 +136,11 @@ sat p = P $ \st -> case st.rest of
     , rest = r
     }, c)
   _ -> Nothing
+
+peeks :: (Maybe Char -> a) -> Parse a
+peeks f = P $ \st -> Just (st, case st.rest of
+  c T.:< _ -> f (Just c)
+  T.Empty -> f Nothing)
 
 -- ^ lookahead at the next few characters without parsing
 look :: Int -> Parse Text

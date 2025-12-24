@@ -9,6 +9,7 @@ module Language.CCS.Lexer.Pipeline
 import Prelude hiding (lex, lines, exp)
 
 import Control.Applicative ((<|>))
+import Control.Monad (when, unless)
 import Data.Char (chr, ord, isOctDigit, isDigit, isHexDigit, toLower)
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -316,74 +317,61 @@ takeDqs = loop []
     Nothing -> pure $ reverse revacc
 
 takeDq :: Src.Parse (Maybe StrToken)
-takeDq = Src.branch
-  [ (takeDqStd, pure . Just)
-  , (takeDqEsc, pure . Just)
-  , (takeDqIllegal, pure . Just)
-  , (pure undefined, pure . const Nothing)
-  ]
-
-takeDqStd :: Src.Parse StrToken
-takeDqStd = do
-  src <- Src.theConsumed $ Src.takeWhile1 (not . (`T.elem` "\"`\\"))
-  pure $ StdStr src
+takeDq = Src.peeks (maybe SQuo classifyString) >>= \case
+  SStd -> do
+    src <- Src.theConsumed $ Src.takeWhile1 ((== SStd) . classifyString)
+    pure . Just $ StdStr src
+  SEsc -> Just <$> takeDqEsc
+  SQuo -> pure Nothing
+  SIll -> do
+    src <- Src.theConsumed $ Src.takeWhile1 ((== SIll) . classifyString)
+    pure . Just $ IllStr src
 
 takeDqEsc :: Src.Parse StrToken
 takeDqEsc = do
-  (loc, tokE) <- Src.withSpan $ stdEsc <|> xEsc <|> uEsc
+  (src, tokE) <- Src.withConsumed $ do
+    _ <- Src.sat ((== SEsc) . classifyString)
+    stdEsc <|> xEsc <|> uEsc <|> pure Nothing
   pure $ case tokE of
-    Right code -> StrEscape loc code
-    Left err -> IllStr $ Src.fromPos loc.start err
+    Just code -> StrEscape src.span code
+    Nothing -> IllStr src
   where
-  stdEsc :: Src.Parse (Either Text Char)
+  stdEsc :: Src.Parse (Maybe Char)
   stdEsc = do
-    _ <- Src.sat (== '\\')
+    -- escape character
     char <- Src.sat (`elem` (fst <$> stdEscapes))
-    pure $ Right . unwrapOrPanic_ $ lookup char stdEscapes
-  xEsc :: Src.Parse (Either Text Char)
+    -- loookup meaning
+    pure $ lookup char stdEscapes
+  xEsc :: Src.Parse (Maybe Char)
   xEsc = do
-    -- backslash + x
-    bs <- Src.sat (== '\\')
-    x <- Src.sat (== 'x')
+    -- escape character
+    _ <- Src.sat (== 'x')
     -- two digits
-    aE <- (Right <$> Src.sat isHexDigit) <|> (Left <$> Src.take 1)
-    bE <- (Right <$> Src.sat isHexDigit) <|> (Left <$> Src.take 1)
+    aM <- (Just <$> Src.sat isHexDigit) <|> (Nothing <$ Src.take 1)
+    bM <- (Just <$> Src.sat isHexDigit) <|> (Nothing <$ Src.take 1)
     -- parse digits or form error
-    pure $ case (aE, bE) of
-      (Right a, Right b) ->
-        let code = unwrapOrPanic_ $ parseHex [a, b]
-         in Right (chr $ fromInteger code)
-      _ ->
-        let a = either id T.singleton aE
-            b = either id T.singleton bE
-        in Left $ T.pack [bs, x] <> a <> b
-  uEsc :: Src.Parse (Either Text Char)
+    pure $ do
+      a <- aM
+      b <- bM
+      code <- parseHex [a, b]
+      Just (chr $ fromInteger code)
+  uEsc :: Src.Parse (Maybe Char)
   uEsc = do
-    -- backslash + u
-    bs <- Src.sat (== '\\')
-    u <- Src.sat (== 'u')
+    -- escape character
+    _ <- Src.sat (== 'u')
     -- open bracket, hex digits, close bracket
     openM <- (Just <$> Src.sat (== '{')) <|> pure Nothing
-    codeE <- (Right <$> Src.takeWhile1 isHexDigit) <|> (Left <$> pure "")
+    codeM <- (Just <$> Src.takeWhile1 isHexDigit) <|> pure Nothing
     closeM <- (Just <$> Src.sat (== '}')) <|> pure Nothing
     -- parse digits or form error
-    pure $ case (openM, codeE, closeM) of
-      (Just _, Right digits, Just _)
-        | code <- unwrapOrPanic_ $ parseHex (T.unpack digits)
-        , 0 <= code && code <= 0x10FFFF
-        , not (0xD000 <= code && code <= 0xDFFF) -- surrogate pairs are invalid codepoints
-        -> Right (chr $ fromInteger code)
-      _ ->
-        let open = maybe "" T.singleton openM
-            digits = either id id codeE
-            close = maybe "" T.singleton closeM
-         in Left $ T.pack [bs, u] <> open <> digits <> close
-
-takeDqIllegal :: Src.Parse StrToken
-takeDqIllegal = do
-  -- TODO perhaps other characters should be illegal, outisde of backslash (and doublequote/backtick, which end the token)
-  (loc, bs) <- Src.withSpan $ T.singleton <$> Src.sat (== '\\')
-  pure $ IllStr $ Src.fromPos loc.start bs
+    pure $ do
+      _ <- openM
+      digits <- codeM
+      _ <- closeM
+      code <- parseHex (T.unpack digits)
+      unless (0 <= code && code <= 0x10FFFF) Nothing
+      when (0xD000 <= code && code <= 0xDFFF) Nothing -- surrogate pairs are invalid codepoints
+      Just (chr $ fromInteger code)
 
 --- Multi-line Strings ---
 
@@ -416,10 +404,6 @@ lexAfterMlDelim src = case Src.evalParse parser src of
       _ -> do
         _ <- Src.takeWhile (not . (`T.elem` " \t#"))
         pure Illegal
-
-----------------------------
------- DELME ------
-----------------------------
 
 ------ Terminals/Alphabet ------
 
@@ -483,6 +467,26 @@ classify c
   | c == '}' = Punct (Close Curly)
   | c == '~' = Id0
   | otherwise = Ill -- TODO this completely disallows all non-ascii outside strings and comments
+
+data ClassifyString
+  = SStd
+  | SQuo
+  | SEsc
+  | SIll
+  deriving (Eq)
+
+classifyString :: Char -> ClassifyString
+classifyString c
+  -- ascii control codes
+  | '\0' <= c && c <= '\x1F' = SIll
+  -- ascii printing
+  | ' ' <= c && c <= '~' = case c of
+    '\"' -> SQuo
+    '`' -> SQuo
+    '\\' -> SEsc
+    _ -> SStd
+  -- ascii delete and proper unicode
+  | otherwise = SIll -- TODO allow at least some unicode characters, probably anything not a control code
 
 stdEscapes :: [(Char, Char)]
 stdEscapes =
