@@ -3,6 +3,10 @@ There are a lot of moving peices to that, and this is where I'm putting my exper
 
 First off, I'm building this in Haskell, because it's great for making languages, and because I'm very familiar with the relevant packages.
 
+# Map of Content
+
+- most recent devlog: [](Notes/blog/2025-12-23.md)
+
 # Notes to Self
 
 Minimal next step: collect modules from files.
@@ -24,6 +28,51 @@ It's all in preparation for a scope checker/renamer.
 - I've got loads of calls to `unwrapOrPanic . mkSpan` which indicate I need a real API
 
 # Ideas
+
+## Syntax Syntax (later: a language)
+
+Let's say we allow backslash-identifier sequences as "holes".
+That way, we get named hooles without trying to overload underscore with too much.
+
+Well then, why not name the holes in syntax?
+- We'd get to document the parts of the syntax.
+- We could assign a grammatical type to each hole, thus allowing syntax to differ in different contexts (term vs do-statement vs decl).
+- We could apply a rewrite rule to the hole.
+- If I come up with any additional properties to give to holes, then I've got a ready-made space in the concrete syntax to put them.
+
+```
+syntax expr:
+  if \p then \c else \a -> boolElim:
+    "the predicate"
+    p: expr
+    c: expr -> $(lazy \c)
+    a: expr -> $(lazy \a)
+```
+
+where `lazy` would be some macro that makes sure the expression evaluation is delayed.
+Note that the hole has its mixfixes rewritten before it is inserted into the rewrite rhs.
+I've ignored syntax groups (which would get a name, ordering constraints, and the grammar type) above.
+
+## Comptime Types, Values, and Functions (later: a language)
+
+I'm also thinking about perhaps having a `comptime` quantity associated with variables.
+This is slightly different from a `0` (erased) quantity, because while erased variables cannot be used for computation outside types,
+    comptime variables could at least be _evaluated_ at compiletime (eg during macro expansion), even in an expression.
+
+With comptime, compilers could support big ints/floats in the syntax, but not proovide those types at runtime.
+The way to connect them would be throuogh a (overloaded literal) typeclass with a comptime `from{Int,FLoat,String}` method.
+I'm a little excited at the prospect that badly-formed literals will be guaranteed to trigger their parse error at compiletime instead of runtime.
+This is esp nice for big floats, since basic arithmetic on them might cause memory exhaustion (imagine `1.0e4_000_000_000 + 1.0e-8_000_000_000_000_000` without rounding).
+If `fromFloat` is comptime, the worst you can do is overwhelm your compiler, not the target system.
+
+Of course, comptime quantities likely have more applications than just overloaded literals.
+Rust has `comptime` as well, and I've heard it can do some nice macro-like stuff.
+I suspect it couold be useful for implementing control structures in an FP way, while guaranteeing the compiletime elimination of any lambdas involved.
+At the very least, I hope it can reduce the need for macros.
+
+One thing I'm thinking is: if I have comptime figured out, then it might be easy to create a systems language with a few small changes.
+The systems language could have full access to a gc at compiletime, but all ordinary data types would be `comptime`.
+Then, add in a `layout` declaration to set up the runtime memory layout for types that appear at runtime.
 
 ## Lisp Macros
 
