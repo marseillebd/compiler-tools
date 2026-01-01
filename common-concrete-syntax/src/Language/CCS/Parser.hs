@@ -9,6 +9,7 @@ module Language.CCS.Parser
   ) where
 
 import Control.Applicative (Alternative(..))
+import Data.Bifunctor (first, second)
 import Data.List.NonEmpty (NonEmpty((:|)), (<|))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -102,8 +103,7 @@ parseSimpleCst = do
 parseSemicolonCst :: Parser CST
 parseSemicolonCst = do
   before <- optional $ punctuation L0.Semicolon
-  inner <- parseCommaCst `sepBy1` punctuation L0.Semicolon
-  after <- optional $ punctuation L0.Semicolon
+  (inner, after) <- parseCommaCst `sepEndBy1` punctuation L0.Semicolon
   pure $ case (before, inner, after) of
     (Nothing, x :| [], Nothing) -> x
     _ -> List (spanAround before inner after) Semicolon inner
@@ -111,8 +111,7 @@ parseSemicolonCst = do
 parseCommaCst :: Parser CST
 parseCommaCst = do
   before <- optional $ punctuation L0.Comma
-  inner <- parsePairCst `sepBy1` punctuation L0.Comma
-  after <- optional $ punctuation L0.Comma
+  (inner, after) <- parsePairCst `sepEndBy1` punctuation L0.Comma
   pure $ case (before, inner, after) of
     (Nothing, x :| [], Nothing) -> x
     _ -> List (spanAround before inner after) Comma inner
@@ -122,7 +121,7 @@ parsePairCst = do
   k <- parseSpaceCst
   v_m <- optional $ do
     _ <- punctuation L0.Pair
-    v <- parseSpaceCst
+    v <- parseSpaceCst -- TODO or should this parsePairCst again? I've chosen conservatively for now
     pure v
   pure $ case v_m of
     Nothing -> k
@@ -139,7 +138,9 @@ parseSpaceCst = do
 parseLineCont :: Parser [CST]
 parseLineCont = do
   _ <- punctuation L0.ContinueLine
+  _ <- indent
   xss <- parseSimpleCsts `sepBy1` nextline
+  _ <- dedent
   pure $ concatMap NE.toList xss
 
 parseChainCst :: Parser CST
@@ -162,7 +163,7 @@ parseBaseCst = parseAtom <|> parseEnclosed <|> parseTemplate
 parseAtom :: Parser CST
 parseAtom = satP $ \case
     L0.Atom spn atom -> Right $ Atom spn (xlate atom)
-    it -> Left $ Expecting "atom" it.span
+    it -> Left $ Expecting "atom" it
 
 parseTemplate :: Parser CST
 parseTemplate = do
@@ -196,7 +197,10 @@ parseEnclosed
     open <- punctuation (L0.Open ty)
     inner <- optional $ parseCst <|> parseBracketedIndent
     close <- punctuation (L0.Close ty)
-    pure $ Enclose (open <> close) Round inner
+    pure $ Enclose (open <> close) (xlateBrack ty) inner
+  xlateBrack L0.Round = Round
+  xlateBrack L0.Square = Square
+  xlateBrack L0.Curly = Curly
 
 parseBareIndent :: Parser CST
 parseBareIndent = do
@@ -218,22 +222,22 @@ parseBracketedIndent = do
 indent :: Parser Span
 indent = satP $ \case
   L0.Indent spn -> Right spn
-  it -> Left $ Expecting "indent" it.span
+  it -> Left $ Expecting "indent" it
 
 nextline :: Parser Span
 nextline = satP $ \case
   L0.Nextline spn -> Right spn
-  it -> Left $ Expecting "nextline" it.span
+  it -> Left $ Expecting "nextline" it
 
 dedent :: Parser Span
 dedent = satP $ \case
   L0.Dedent spn -> Right spn
-  it -> Left $ Expecting "dedent" it.span
+  it -> Left $ Expecting "dedent" it
 
 template :: L0.TemplateType -> Parser (Span, Text)
 template ty = satP $ \case
   L0.StringTemplate spn ty' txt | ty == ty' -> Right (spn, txt)
-  it -> Left $ Expecting errMsg it.span
+  it -> Left $ Expecting errMsg it
   where
   errMsg = case ty of
     L0.OpenTemplate -> "open template"
@@ -243,7 +247,7 @@ template ty = satP $ \case
 punctuation :: L0.PunctuationType -> Parser Span
 punctuation p = satP $ \case
   L0.Punctuation spn p' | p == p' -> Right spn
-  it -> Left $ Expecting errMsg it.span
+  it -> Left $ Expecting errMsg it
   where
   errMsg = case p of
     L0.Open L0.Round -> "open paren"
@@ -292,27 +296,40 @@ unconsSt st = case st.rest of
   [] -> Nothing
 
 data Result a
-  = Ok [ParseError] a (Maybe St)
-  | Err [ParseError] (Maybe St)
+  = Ok [ParseError] a (Consumed St)
+  | Err [ParseError] (Consumed St)
+
+data Consumed a
+  = Consumed a
+  | Unconsumed
+updateSt :: St -> Consumed St -> St
+updateSt st Unconsumed = st
+updateSt _ (Consumed st) = st
+instance Semigroup (Consumed a) where
+  Consumed _ <> Consumed b = Consumed b
+  a <> Unconsumed = a
+  Unconsumed <> b = b
+
 
 deriving instance Functor Result
 instance Applicative Result where
-  pure x = Ok [] x Nothing
-  Ok errs1 f st <*> Ok errs2 x st' = Ok (errs2 <> errs1) (f x) (st' <|> st)
-  Ok errs1 _ st <*> Err errs2 st' = Err (errs2 <> errs1) (st' <|> st)
+  pure x = Ok [] x Unconsumed
+  Ok errs1 f st <*> Ok errs2 x st' = Ok (errs2 <> errs1) (f x) (st <> st')
+  Ok errs1 _ st <*> Err errs2 st' = Err (errs2 <> errs1) (st <> st')
   Err errs1 st <*> _ = Err errs1 st
 instance Monad Result where
   Ok errs1 x st >>= k = case k x of
-    Ok errs2 y st' -> Ok (errs2 <> errs1) y (st' <|> st)
-    Err errs2 st' -> Err (errs2 <> errs1) (st' <|> st)
+    Ok errs2 y st' -> Ok (errs2 <> errs1) y (st <> st')
+    Err errs2 st' -> Err (errs2 <> errs1) (st <> st')
   Err errs st >>= _ = Err errs st
 withSt :: St -> Result a -> Result (St, a)
-withSt st0 (Ok errs1 x st1) = Ok errs1 (fromMaybe st0 st1, x) st1
+withSt st0 (Ok errs1 x st1) = Ok errs1 (updateSt st0 st1, x) st1
 withSt _ (Err errs1 st1) = Err errs1 st1
 
 data ParseError
   = UnexpectedEndOfInput Span
-  | Expecting String Span
+  | Expecting String L0.Token
+  deriving (Show)
 
 runParser :: Parser a -> Span -> [L0.Token] -> ([ParseError], Maybe a)
 runParser p loc inp = case unP p St{ rest = inp, pos = loc } of
@@ -325,7 +342,7 @@ instance Applicative Parser where
   pure x = P $ \_ -> pure x
   (<*>) = seqP
 instance Alternative Parser where
-  empty = P $ \_ -> Err [] Nothing -- FIXME
+  empty = P $ \_ -> Err [] Unconsumed -- FIXME
   a <|> b = altP a b
 -- intentionally no monad instance
 
@@ -338,15 +355,15 @@ instance Alternative Parser where
 satP :: (L0.Token -> Either ParseError a) -> Parser a
 satP p = P $ \st -> case unconsSt st of
   Just (x, st') -> case p x of
-    Right y -> Ok [] y (Just st')
-    Left err -> Err [err] Nothing
-  Nothing -> Err [UnexpectedEndOfInput st.pos] Nothing
+    Right y -> Ok [] y (Consumed st')
+    Left err -> Err [err] Unconsumed
+  Nothing -> Err [UnexpectedEndOfInput st.pos] Unconsumed
 
 -- Detect end of input
 endP :: Parser ()
 endP = P $ \st -> case unconsSt st of
-  Nothing -> Ok [] () Nothing
-  Just (x, _) -> Err [Expecting "end of input" x.span] Nothing
+  Nothing -> Ok [] () Unconsumed
+  Just (x, _) -> Err [Expecting "end of input" x] Unconsumed
 
 --- Sequencing ---
 seqP :: Parser (a -> b) -> Parser a -> Parser b
@@ -360,14 +377,16 @@ altP :: Parser a -> Parser a -> Parser a
 altP a b = P $ \st -> case unP a st of
   ok@(Ok _ _ _) -> ok
   err@(Err _ st') -> case st' of
-    Nothing -> err >> unP b st
-    Just _ -> err
+    Unconsumed -> case unP b st of
+      Ok _ x st'' -> Ok [] x st''
+      err' -> err >> err'
+    Consumed _ -> err
 
 -- Backtracking
 try :: Parser a -> Parser a
 try p = P $ \st -> case unP p st of
   ok@(Ok _ _ _) -> ok
-  Err errs1 _ -> Err errs1 Nothing
+  Err errs1 _ -> Err errs1 Unconsumed
 
 --- Error Management ---
 
@@ -375,7 +394,7 @@ try p = P $ \st -> case unP p st of
 recoverP :: Parser a -> a -> Parser a
 recoverP p x = P $ \st -> case unP p st of
   ok@(Ok _ _ _) -> ok
-  Err errs1 _ -> Ok errs1 x Nothing
+  Err errs1 _ -> Ok errs1 x Unconsumed
 
 infixl 3 <??>
 (<??>) :: Parser a -> a -> Parser a
@@ -428,3 +447,18 @@ sepBy1 p sep = start
     xs <- loop
     pure $ x : xs
 
+sepEndBy1 :: Parser a -> Parser any -> Parser (NonEmpty a, Maybe any)
+sepEndBy1 p sep = start
+  where
+  start = do
+    x <- p
+    xs <- sepMode <|> pure ([], Nothing)
+    pure $ first (x :|) xs
+  sepMode = do
+    s <- sep
+    xs <- elemMode <|> pure ([], Nothing)
+    pure $ second (Just s <|>) xs
+  elemMode = do
+    x <- p
+    xs <- sepMode <|> pure ([], Nothing)
+    pure $ first (x:) xs

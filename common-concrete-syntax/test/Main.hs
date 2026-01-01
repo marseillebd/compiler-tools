@@ -6,22 +6,24 @@ module Main (main) where
 import Data.Function ((&))
 import Data.IORef(IORef, newIORef, readIORef, modifyIORef)
 import Data.Text (Text)
+import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
+import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
+import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
+import Language.CCS.Lexer.Sandhi (SandhiError(..))
+import Language.CCS.Lexer (tokens, lexemes, lexemesToCsts)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Golden (goldenVsFile)
-import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
-import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
-import Language.CCS.Lexer.Sandhi (SandhiError(..))
-import Language.CCS.Lexer (tokens, lexemes)
+import Text.Pretty.Simple (pShowNoColor)
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import qualified Data.Text.Lazy as LT
 
 main :: IO ()
 main = defaultMain $ testGroup "Tests"
-  [ testGroup "Tokenizer (morphemes)"
+  [ testGroup "Tokenizer"
     [ golden "test all legal raw tokens at once" "allTokens" $ \input -> do
       let output = tokens input
       pure $ T.unlines $ T.pack . show <$> output
@@ -32,7 +34,7 @@ main = defaultMain $ testGroup "Tests"
       let output = tokens input
       pure $ T.unlines $ T.pack . show <$> output
     ]
-  , testGroup "Tokenizer (lexemes)"
+  , testGroup "Lexer"
     [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
       (err, out) <- input
             & lexemes
@@ -40,6 +42,23 @@ main = defaultMain $ testGroup "Tests"
       pure $ T.concat
         [ err
         , T.unlines $ T.pack . show <$> out
+        ]
+    ]
+  , testGroup "Parser"
+    [ golden "smoke test all syntax tree constructs" "allTrees" $ \input -> do
+      -- let coverage = tokens input
+      (lexErr, toks) <- execErr $ lexemes input
+      let (parseErrs, out_m) = lexemesToCsts toks
+      pure $ T.concat
+        -- [ T.unlines $ T.pack . show <$> coverage
+        -- , "\n------------------\n"
+        -- , lexErr
+        -- , "\n"
+        -- , T.unlines $ T.pack . show <$> toks
+        -- , "\n------------------\n"
+        [ T.unlines $ T.pack . show <$> parseErrs
+        , "\n"
+        , maybe "" (LT.toStrict . pShowNoColor) out_m
         ]
     ]
   ]

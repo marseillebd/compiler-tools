@@ -1,0 +1,35 @@
+hello
+1
+1.2
+-1.2e3
+"hello, world!"
+
+hello:world
+hello.world
+hello world
+hello: world
+hello, world
+hello; world
+
+;a
+a;
+, a
+a,
+
+a; b, k: c.d:e:w.x, y; z
+
+(a) [b] {c}:
+  d
+  e
+
+"Hello, `name`!"
+"Hello, `name`!\nGoodbye, `name`!"
+
+def const(a, b):
+  a
+
+a(x).b[i](y)
+
+foo bar \
+  a b
+  c

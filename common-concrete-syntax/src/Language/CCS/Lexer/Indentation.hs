@@ -116,7 +116,7 @@ detectIndentation st inp0 = S.effect $ S.next inp0 >>= \case
     pure $ do
       yield other'
       detectIndentation st rest
-  Left _ -> internalError "no eol at end of token stream"
+  Left r -> pure $ pure r
 
 analyzeIndent :: MalformedIndentation m
   => IndentState

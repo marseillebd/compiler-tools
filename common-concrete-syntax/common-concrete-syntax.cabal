@@ -68,5 +68,6 @@ test-suite common-concrete-syntax-test
     build-depends:
       , common-concrete-syntax
       , filepath
+      , pretty-simple
       , tasty
       , tasty-golden

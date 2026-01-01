@@ -18,7 +18,7 @@ import Control.Monad (when)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unused)
-import Language.CCS.Lexer.Cover (QuoteType(..), Sign, Radix(..))
+import Language.CCS.Lexer.Cover (QuoteType(..), Sign(..), Radix(..))
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
@@ -71,7 +71,13 @@ data IntLit = IntLit
   { signI :: Sign
   , magI :: Integer -- NOTE should be Natural
   }
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show IntLit where
+  show it = concat
+    [ case it.signI of { Positive -> "+"; Negative -> "-" }
+    , show it.magI
+    ]
 
 data FloLit
   = FloLit
@@ -79,7 +85,20 @@ data FloLit
     , magF :: Integer -- NOTE should be Natural
     , expF :: (Radix, Integer)
     }
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show FloLit where
+  show it = concat
+    [ case it.signF of { Positive -> "+"; Negative -> "-" }
+    , show it.magF
+    , if snd it.expF == 0 then ""
+      else concat
+      [ "x"
+      , show (fst it.expF).base
+      , "^"
+      , show $ snd it.expF
+      ]
+    ]
 
 data TemplateType
   = OpenTemplate

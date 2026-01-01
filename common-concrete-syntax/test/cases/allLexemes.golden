@@ -13,28 +13,28 @@ TooManyDots: 48:1--48:5
 TooManyColons: 48:6--48:10
 Atom 2:3--2:12 (Symbol "badIndent")
 Atom 3:6--3:19 (Symbol "moreBadIndent")
-Atom 5:1--5:2 (IntegerLiteral (IntLit {signI = Positive, magI = 1}))
+Atom 5:1--5:2 (IntegerLiteral +1)
 Nextline 6:1--6:1
-Atom 6:1--6:3 (IntegerLiteral (IntLit {signI = Negative, magI = 4}))
-Atom 6:4--6:6 (IntegerLiteral (IntLit {signI = Positive, magI = 3}))
+Atom 6:1--6:3 (IntegerLiteral -4)
+Atom 6:4--6:6 (IntegerLiteral +3)
 Nextline 7:1--7:1
-Atom 7:1--7:5 (FloatingLiteral (FloLit {signF = Positive, magF = 102, expF = (Base10,-2)}))
+Atom 7:1--7:5 (FloatingLiteral +102x10^-2)
 Nextline 8:1--8:1
-Atom 8:1--8:6 (FloatingLiteral (FloLit {signF = Positive, magF = 1, expF = (Base2,8)}))
+Atom 8:1--8:6 (FloatingLiteral +1x2^8)
 Nextline 9:1--9:1
-Atom 9:1--9:6 (FloatingLiteral (FloLit {signF = Positive, magF = 10, expF = (Base16,-1)}))
+Atom 9:1--9:6 (FloatingLiteral +10x16^-1)
 Nextline 10:1--10:1
-Atom 10:1--10:7 (FloatingLiteral (FloLit {signF = Positive, magF = 420, expF = (Base10,4)}))
+Atom 10:1--10:7 (FloatingLiteral +420x10^4)
 Nextline 11:1--11:1
-Atom 11:1--11:8 (FloatingLiteral (FloLit {signF = Positive, magF = 420, expF = (Base10,4)}))
+Atom 11:1--11:8 (FloatingLiteral +420x10^4)
 Nextline 12:1--12:1
-Atom 12:1--12:8 (FloatingLiteral (FloLit {signF = Positive, magF = 420, expF = (Base10,-8)}))
+Atom 12:1--12:8 (FloatingLiteral +420x10^-8)
 Nextline 13:1--13:1
-Atom 13:1--13:10 (FloatingLiteral (FloLit {signF = Negative, magF = 16, expF = (Base16,-1)}))
+Atom 13:1--13:10 (FloatingLiteral -16x16^-1)
 Nextline 15:1--15:1
-Atom 15:1--15:9 (FloatingLiteral (FloLit {signF = Negative, magF = 4321, expF = (Base16,-3)}))
+Atom 15:1--15:9 (FloatingLiteral -4321x16^-3)
 Nextline 16:1--16:1
-Atom 16:1--16:7 (FloatingLiteral (FloLit {signF = Negative, magF = 2, expF = (Base2,-1)}))
+Atom 16:1--16:7 (FloatingLiteral -2x2^-1)
 Atom 16:7--16:9 (Symbol "e1")
 Nextline 18:1--18:1
 Atom 18:1--18:16 (StringLiteral "wouldn't've")
