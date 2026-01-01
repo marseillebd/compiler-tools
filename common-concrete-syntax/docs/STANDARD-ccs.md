@@ -304,9 +304,9 @@ Of course, specific downstream types may _later_ performa set quotient operation
 
 ```
 CST ::= Atom
-     |  Enclose Encloser CST
+     |  Enclose Encloser CST?
      |  Pair CST CST // key, value
-     |  List Separator CST*
+     |  List Separator CST+
      |  Template Text (CST Text)+
 
 Atom ::= Symbol Text // but the text has requirements: matches /[:id:]+|:{2,3}|.{2,3}/ - /[+-]?\d.*/

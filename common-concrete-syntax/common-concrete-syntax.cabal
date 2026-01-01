@@ -31,6 +31,7 @@ library
       Language.CCS.Lexer.Pipeline
       Language.CCS.Lexer.Indentation
       Language.CCS.Lexer.Sandhi
+      Language.CCS.Parser
     -- other-modules:
     -- other-extensions:
     build-depends:
