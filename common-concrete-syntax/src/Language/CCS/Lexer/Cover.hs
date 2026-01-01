@@ -1,89 +1,124 @@
-module Language.CCS.Lexer.Pipeline
-  ( pipeline
-  , pipelineFrom
-  , decode
-  , lines
-  , linesFrom
+module Language.CCS.Lexer.Cover
+  ( CCS(..)
+  , Token(..)
+  , StrToken(..)
+  , PunctuationType(..)
+  , BracketType(..)
+  , Sign(..)
+  , Radix(..)
+  , QuoteType(..)
+  , EolType(..)
+  , lexLines
   ) where
 
-import Prelude hiding (lex, lines, exp)
+import Prelude hiding (exp)
 
 import Control.Applicative ((<|>))
 import Control.Monad (when, unless)
-import Data.Char (chr, ord, isOctDigit, isDigit, isHexDigit, toLower)
-import Data.Function ((&))
+import Data.Char (chr, ord, toLower, isDigit, isOctDigit, isHexDigit)
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Language.CCS.Error (placeholder, internalError, unwrapOrPanic_)
-import Language.CCS.Lexer.Morpheme (PunctuationType(..), BracketType(..))
-import Language.CCS.Lexer.Morpheme (QuoteType(..), EolType(..))
-import Language.CCS.Lexer.Morpheme (Sign(..), Radix(..))
-import Language.CCS.Lexer.Morpheme (Token(..), StrToken(..))
-import Language.Location (mkSpan, spanFromPos, Pos, startPos, incLine)
+import GHC.Records (HasField(..))
+import Language.CCS.Error (unwrapOrPanic_, internalError)
+import Language.CCS.Lexer.Decode (Line(..), EolType(..))
+import Language.Location (Span, mkSpan, spanFromPos, incLine)
+import Language.Nanopass (deflang)
 import Language.Text (SrcText)
 
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
-import qualified Data.Text.Encoding.Error as Codec
-import qualified Data.Text.Lazy as LT
-import qualified Data.Text.Lazy.Encoding as Codec
 import qualified Language.Text as Src
 
-pipeline :: LBS.ByteString -> [Token]
-pipeline = pipelineFrom startPos
+----------------------------
+------ Token Language ------
+----------------------------
 
-pipelineFrom :: Pos -> LBS.ByteString -> [Token]
-pipelineFrom pos0 bytes = bytes
-  & decode
-  & linesFrom pos0
-  & lexLines
+[deflang|
+(CCS
 
---------------------
------- Decode ------
---------------------
+  (Token
+    (Symbol SrcText)
+    (Number Span
+      Sign
+      Radix
+      Integer
+      (? (& Integer Int))
+      (? Integer)
+    )
+    (Str Span QuoteType (* StrToken) (? QuoteType))
+    (MlDelim SrcText)
+    (MlContent SrcText)
+    (MlClose Span)
+    (Punctuation Span PunctuationType)
+    (Eol Span EolType)
+    (Whitespace SrcText)
+    (Comment SrcText)
+    (Illegal SrcText)
+  )
 
-decode :: LBS.ByteString -> LT.Text
-decode bytes = placeholder
-  $ bytes
-  & Codec.decodeUtf8With Codec.lenientDecode -- invalid bytes are replaced with U+FFFD (replacement character), so downstream from this placeholder can't have a byte offset
+  (StrToken
+    (StdStr SrcText)
+    (StrEscape Span Char)
+    (IllStr SrcText)
+  )
 
--------------------------
------- Split Lines ------
--------------------------
+  (PunctuationType
+    (Open BracketType)
+    (Close BracketType)
+    (Dots Int)
+    (Colons Int)
+    (Comma)
+    (Semicolon)
+    (Backslash)
+  )
 
-data Line a = Line
-  { line :: a
-  , eol :: EolType
-  }
+)
+|]
+-- TODO the argument for Symbol should enforce the invariants on how Symbols may be spelled
 
-lines :: LT.Text -> [Line SrcText]
-lines = linesFrom startPos
+deriving instance Show Token
+deriving instance Show StrToken
+deriving instance Show PunctuationType
+deriving instance Eq PunctuationType
 
-linesFrom :: Pos -> LT.Text -> [Line SrcText]
-linesFrom _ LT.Empty = [] -- NOTE this means a zero-byte file will have an empty list of lines; anything else will have at least one line (possibly blank ofc)
-linesFrom l str = Line
-  { line = Src.fromPos l (LT.toStrict lazyContent)
-  , eol
-  } : maybe [] (linesFrom nextLine) rest
-  where
-  (lazyContent, eol, rest) = case LT.break (\c -> c == '\n' || c == '\r') str of
-    (pre,                   LT.Empty) -> (pre, Eof,  Nothing)
-    (pre,            '\n' LT.:< post) -> (pre, LF,   Just post)
-    (pre, '\r' LT.:< '\n' LT.:< post) -> (pre, CRLF, Just post)
-    (pre, '\r' LT.:<            post) -> (pre, CR,   Just post)
-    _ -> internalError "expected an end of line sequence after preaking on `\\n|\\r`"
-  nextLine = incLine l
+instance HasField "span" Token Span where
+  getField (Symbol a) = a.span
+  getField (Number a _ _ _ _ _) = a
+  getField (Str a _ _ _) = a
+  getField (MlDelim a) = a.span
+  getField (MlContent a) = a.span
+  getField (MlClose a) = a
+  getField (Punctuation a _) = a
+  getField (Eol a _) = a
+  getField (Whitespace a) = a.span
+  getField (Comment a) = a.span
+  getField (Illegal a) = a.span
+
+data BracketType = Round | Square | Curly
+  deriving (Eq, Show)
+
+data Sign = Positive | Negative
+  deriving (Eq, Show)
+
+data Radix = Base2 | Base8 | Base10 | Base16
+  deriving (Eq, Show)
+
+instance HasField "base" Radix Integer where
+  getField = \case
+    Base2 -> 2
+    Base8 -> 8
+    Base10 -> 10
+    Base16 -> 16
+
+data QuoteType
+  = SqlQuote
+  | DblQuote
+  | Backtick
+  | MlQuote Text
+  deriving (Eq, Show)
 
 ----------------------------
 ------ Coverage Lexer ------
 ----------------------------
-
--- We use @lex*@ to indicate functions that produce tokens based on 'Src.consume'.
--- Thus, they are not composable, but can be "tail-called" from another lex-fuction.
--- Meanwhile @take*@ functions produce output based only on what it consumes.
--- Thus, they _are_ composable, and can be used freely in other take- or lex-functions.
-
------- Main ------
 
 lexLines :: [Line SrcText] -> [Token]
 lexLines = loop StdLex
@@ -181,7 +216,9 @@ lexStd src = case Src.evalParse parser src of
         _ <- Src.takeWhile ((== Ill) . classify)
         pure Illegal
 
+---------------------
 ------ Symbols ------
+---------------------
 
 lexSymbol :: Src.Parse (SrcText -> Token)
 lexSymbol = do
@@ -194,7 +231,9 @@ lexSymbol = do
     Sgn _ -> True
     _ -> False
 
+---------------------
 ------ Numbers ------
+---------------------
 
 lexNumber :: Sign -> Radix -> Text -> Src.Parse (SrcText -> Token)
 lexNumber sign radix firstDigit = do
@@ -256,9 +295,11 @@ takeExpMarker Base10 = Src.tryN 1 $ \next ->
 takeExpMarker _ = Src.tryN 1 $ \next ->
   if T.toLower next == "p" then Right True else Left False
 
+---------------------
 ------ Strings ------
+---------------------
 
---- SQL Strings ---
+------ SQL Strings ------
 
 lexSqString :: Src.Parse (SrcText -> Token)
 lexSqString = do
@@ -295,7 +336,7 @@ takeSqEsc = do
     pure ()
   pure $ StrEscape loc '\''
 
---- Double-quoted Strings ---
+------ Double-quoted Strings ------
 
 lexDqString :: QuoteType -> Src.Parse (SrcText -> Token)
 lexDqString openQuote = do
@@ -373,7 +414,7 @@ takeDqEsc = do
       when (0xD000 <= code && code <= 0xDFFF) Nothing -- surrogate pairs are invalid codepoints
       Just (chr $ fromInteger code)
 
---- Multi-line Strings ---
+------ Multi-line Strings ------
 
 lexTqStr :: Src.Parse (SrcText -> Token)
 lexTqStr = do
@@ -405,7 +446,9 @@ lexAfterMlDelim src = case Src.evalParse parser src of
         _ <- Src.takeWhile (not . (`T.elem` " \t#"))
         pure Illegal
 
+--------------------------------
 ------ Terminals/Alphabet ------
+--------------------------------
 
 data Classify
   = Id0
@@ -505,7 +548,9 @@ stdEscapes =
   , ('\\', '\\')
   ]
 
+---------------------
 ------ Helpers ------
+---------------------
 
 isDigitIn :: Radix -> Char -> Bool
 isDigitIn _ '_' = True
@@ -546,3 +591,4 @@ parseHex str0 = loop 0 str0
     | 'a' <= c && c <= 'f' = loop (acc * 16 + (fromIntegral $ ord c - ord 'a' + 10)) cs
     | 'A' <= c && c <= 'F' = loop (acc * 16 + (fromIntegral $ ord c - ord 'A' + 10)) cs
     | otherwise = Nothing
+

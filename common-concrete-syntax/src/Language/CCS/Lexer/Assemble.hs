@@ -1,6 +1,8 @@
 module Language.CCS.Lexer.Assemble
   ( CCS(..)
   , Atom(..)
+  , IntLit(..)
+  , FloLit(..)
   , Token(..)
   , TemplateType(..)
   , PunctuationType(..)
@@ -16,7 +18,7 @@ import Control.Monad (when)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unused)
-import Language.CCS.Lexer.Morpheme (QuoteType(..), Sign, Radix(..))
+import Language.CCS.Lexer.Cover (QuoteType(..), Sign, Radix(..))
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
@@ -83,7 +85,7 @@ data TemplateType
   = OpenTemplate
   | MidTemplate
   | CloseTemplate
-  deriving (Show)
+  deriving (Eq, Show)
 
 deriving instance Show Atom
 deriving instance Show Token

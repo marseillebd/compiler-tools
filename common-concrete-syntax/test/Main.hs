@@ -13,44 +13,33 @@ import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(.
 import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
 import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
 import Language.CCS.Lexer.Sandhi (SandhiError(..))
+import Language.CCS.Lexer (tokens, lexemes)
 
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Language.CCS.Lexer.Assemble as LexA
-import qualified Language.CCS.Lexer.Indentation as LexI
-import qualified Language.CCS.Lexer.NoiseReduction as LexNR
-import qualified Language.CCS.Lexer.Pipeline as Morpheme
-import qualified Language.CCS.Lexer.Sandhi as LexS
-import qualified Streaming.Prelude as S
 
 main :: IO ()
 main = defaultMain $ testGroup "Tests"
   [ testGroup "Tokenizer (morphemes)"
     [ golden "test all legal raw tokens at once" "allTokens" $ \input -> do
-      let output = Morpheme.pipeline input
+      let output = tokens input
       pure $ T.unlines $ T.pack . show <$> output
     , golden "smoke test all lexemes as raw tokens" "allRawLexemes" $ \input -> do
-      let output = Morpheme.pipeline input
+      let output = tokens input
       pure $ T.unlines $ T.pack . show <$> output
     , golden "empty input file has no tokens" "noTokens" $ \input -> do
-      let output = Morpheme.pipeline input
+      let output = tokens input
       pure $ T.unlines $ T.pack . show <$> output
     ]
   , testGroup "Tokenizer (lexemes)"
     [ golden "smoke test all lexemes" "allLexemes" $ \input -> do
       (err, out) <- input
-            & Morpheme.pipeline
-            & S.each
-            & LexNR.pipeline
-            & LexA.assemble
-            & LexI.process
-            & LexS.process
-            & S.toList
+            & lexemes
             & execErr
       pure $ T.concat
         [ err
-        , T.unlines $ T.pack . show <$> S.fst' out
+        , T.unlines $ T.pack . show <$> out
         ]
     ]
   ]
@@ -133,8 +122,8 @@ instance SandhiError Err where
     [ "CrammedTokens: ", show l]
   raiseExpectedWhitespace l = addErr $ concat
     [ "ExpectedWhitespace: ", show l]
-  raiseUnexpectedIndent l = addErr $ concat
-    [ "UnexpectedIndent: ", show l]
+  raiseBareIndent l = addErr $ concat
+    [ "BareIndent: ", show l]
   raiseUnexpectedWhitespace l = addErr $ concat
     [ "UnexpectedWhitespace: ", show l]
   raiseUnexpectedDot l = addErr $ concat

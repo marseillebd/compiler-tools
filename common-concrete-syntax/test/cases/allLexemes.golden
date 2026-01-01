@@ -6,7 +6,7 @@ TrailingWhitespace: 7:5--7:7
 UnexpectedExponent: 8:1--8:6
 CrammedTokens: 16:7--16:7
 IllegalBytesOrChars: 27:8--27:11 "end"
-UnexpectedIndent: 31:1--31:5
+BareIndent: 31:1--31:5
 InsufficientIndentation: 38:1--38:2
 LeadingWhitespace: 40:3--40:6
 TooManyDots: 48:1--48:5

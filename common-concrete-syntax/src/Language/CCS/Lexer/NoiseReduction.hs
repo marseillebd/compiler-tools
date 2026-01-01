@@ -13,14 +13,14 @@ import Control.Monad (when)
 import Data.Function ((&))
 import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unused)
-import Language.CCS.Lexer.Morpheme (EolType(..))
+import Language.CCS.Lexer.Decode (EolType(..))
 import Language.Location (Span)
 import Language.Nanopass (deflang, defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
-import qualified Language.CCS.Lexer.Morpheme as L0
+import qualified Language.CCS.Lexer.Cover as L0
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 

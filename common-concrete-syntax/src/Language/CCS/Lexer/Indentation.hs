@@ -1,7 +1,7 @@
 module Language.CCS.Lexer.Indentation
   ( CCS(..)
-  , Atom(..)
   , Token(..)
+  , Atom(..)
   , PunctuationType(..)
   , process
   , MalformedIndentation(..)

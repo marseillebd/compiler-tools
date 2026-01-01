@@ -1,7 +1,10 @@
 module Language.CCS.Lexer.Sandhi
   ( CCS(..)
   , Token(..)
+  , Atom(..)
   , PunctuationType(..)
+  , TemplateType(..)
+  , BracketType(..)
   , process
   , SandhiError(..)
   ) where
@@ -12,6 +15,7 @@ import Control.Monad (when, unless)
 import GHC.Records (HasField(..))
 import Language.CCS.Error (internalError, unused)
 import Language.CCS.Lexer.Assemble (TemplateType(..))
+import Language.CCS.Lexer.Cover (BracketType(..))
 import Language.Location (Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 import Streaming.Prelude (yield)
@@ -41,6 +45,7 @@ import qualified Streaming.Prelude as S
 deriving instance Show Atom
 deriving instance Show Token
 deriving instance Show PunctuationType
+deriving instance Eq PunctuationType
 
 instance HasField "span" Token Span where
   getField (Atom a _) = a
@@ -134,7 +139,7 @@ process = mapWithLookaround $ \(prev, here, next) -> case here of
   L0.Whitespace _ -> pure []
   L0.Indent _ -> do
     unless (canStartIndent prev) $ do
-      raiseUnexpectedIndent here.span
+      raiseBareIndent here.span
     pure [xlate here]
   L0.Nextline _ -> pure [xlate here]
   L0.Dedent _ -> pure [xlate here]
@@ -241,7 +246,7 @@ canStartIndent (Just tok) = case tok of
 class Monad m => SandhiError m where
   raiseCrammedTokens :: Span -> m ()
   raiseExpectedWhitespace :: Span -> m ()
-  raiseUnexpectedIndent :: Span -> m ()
+  raiseBareIndent :: Span -> m ()
   raiseUnexpectedWhitespace :: Span -> m ()
   raiseUnexpectedDot :: Span -> m ()
   raiseUnexpectedColon :: Span -> m ()
