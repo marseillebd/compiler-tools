@@ -191,7 +191,7 @@ The design of CCS also attempts to satisfy a number of secondary goals:
   One might consider this a sad fact, but it is not so different from any other aspect of life, from food preferences to high art.
   This standard accepts that fact, and attempts to stay within the boundaries of what is already accepted in popular languages.
 - **Ergonomic**:
-  Ergonimic means that it is relatively easy to read/write the code correctly rather than incorrectly.
+  Ergonimic means that it is easier to read/write the code correctly rather than incorrectly.
   If even novices don't struggle, the experts should truly have a smooth experience.
   This drives decisions to allow different meanings to also _look_ different, if only a little.
   (Eg a block of statements is understood differently from a list of parameters, so we allow both curly- and round-brackets for this purpose.)
@@ -292,44 +292,159 @@ It takes more work, yes, but it also is immesurably helpful for
 Data Types
 ==========
 
+CCS is best described in a series of layers from most-abstract to most-concrete.
+`Tree -> Token Stream -> Coverage Token Stream -> Text -> Binary`.
+At each stage, the forward transform (indicated by the arrows) is a multi-valued function.
+The reverse transformation indicates a parsing step (mapping several encodings to a single, more abstract value).
+
+An additional "layer" proves useful to understand and work with CCS at a higher level (less detail).
+This is the "Unvalidated Tree", which is acheived by forgetting the proofs of certain guarantees.
+These proofs are generally awkward to encode in ordinary progrmming languages, if they can be encoded at all.
+Even in mathematical descriptions, such guarantees are normally omitted, with the reader inferring them while reading;
+    beleive it or not, most math literature I've read are strictly-speaking informal, in that they aren't written entirely in the axioms of ZFC or whatever, with the exception of the Principia Mathematica, which proved too pedantic even for its own authors.
+
+We will begin with a description of the trees, first unvalidated, and then describe the restrictions on those trees that give rise to valid trees.
+Subsequent sections will give generative grammars relating each layer to the next.
+If a grammar generates a lower-level stream `X` from a higher-level value `Y`, then a compliant CCS consumer MUST recognize the stream `X` as valid and map it to the value `Y`.
+Likewise, a compliant CCS producer MUST output a stream that is produced by the generative grammar.
+These are all requirements, but recommendations/suggestions are given as-needed in the sequent.
 
 
-TODO explain/adjust what I've described here
+Unvalidated Trees
+-----------------
 
-The sign is kept for floating point literals because IEE754 says negative zero is a thing.
-It is kept for integer literals because a) they could be silently converted to floating point by downstream, and b) we may for some reason want a signed zero for simulating sign-magnitude arithmetic or just some obscure math concept like the line with two origins; I suspect most downstreams will ignore the sign for zero magnitude
-The radix is kept for floating point literals because it may be an important part of indicating precision: eg scientific notation encodes uncertainty in how many (or rather, how few) significant figures are present, for which we must know how big a jump each digit is.
-Note that this also means we cannot throw away trailing zeros by compressing floats that are multiples of the radix: `1.00e4 /= 1e2` because the significant figures are different, and this is represented with `Flo(100, base10, 4) /= Flo(1, base10, 2)`.
-Of course, specific downstream types may _later_ performa set quotient operation.
+Valid (and some invalid) CSS trees can be represented by the `CST` abstract data type that follows, along with supporting definitions:
 
 ```
-CST ::= Atom
-     |  Enclose Encloser CST?
-     |  Pair CST CST // key, value
-     |  List Separator CST+
-     |  Template Text (CST Text)+
+Atom ::= Symbol Text                              // but the text has requirements: matches /[:id:]+|[.:]{2,3}/ - /[+-]?\d.*/
+      |  IntegerLiteral {+,-} ℕ                   // An integer literal, or negative zero
+      |  FloatingLiteral {+,-} ℕ {2,8,10,16} ℤ    // binary floating-point literal, of the form ±a * r^b
+      |  StringLiteral Text                       // A string literal on one line
+      |  MultilineLiteral Text*                   // A multi-line string literal, preserving original line breaks
 
-Atom ::= Symbol Text // but the text has requirements: matches /[:id:]+|:{2,3}|.{2,3}/ - /[+-]?\d.*/
-      |  IntegerLiteral {+,-} ℕ
-      |  FloatingLiteral {+,-} ℕ {2,8,16} ℤ // ±a * r^b
-      |  DecimalFloatingLiteral {+,-} ℕ ℤ // ±a * 10^b
-      |  StringLiteral Text
-      |  MultilineLiteral Text*
+CST ::= Atom
+     |  Enclose Encloser CST?        // zero or one trees inside brackets
+     |  Block CST+                   // an indented block
+     |  Pair CST CST                 // key and value trees, separated by a colon
+     |  List Separator CST+          // One or more trees, separated by commas, semicolon, or other separator
+     |  Template Text (CST, Text)+    // A string, templatized by filling holes with trees
 
 Encloser ::= Round
           |  Square
           |  Curly
-          |  Indent
 
-Separator ::= Semicolon
-           |  Comma
-           |  Space
-           |  Dot // which may also include a(b) a[b], and so on
-           |  Colon // qualified names `a:b`, and qualified literals `i32:-1`
+Separator ::= Semicolon    // for separating by semicolons
+           |  Comma        // for separating by commas
+           |  Space        // for separating by whitespace
+           |  Dot          // for field access `a.b`, but also function call, indexing, and the like with `a(b), `a[b]`, and `a{b}`
+           |  Colon        // qualified names `a:b`, and qualified literals `i32:-1`
+```
+
+> Rationale
+>
+> The sign is kept for floating point literals because IEE754 says negative zero is a thing.
+> It is kept for integer literals because
+>   a) they could be silently converted to floating point by downstream, and
+>   b) we may for some reason want a signed zero for simulating sign-magnitude arithmetic
+>     or just some obscure math concept like the line with two origins.
+> I suspect most downstreams will ignore the sign for zero magnitude integers.
+>
+> The radix is kept for floating point literals because it may be an important part of indicating precision.
+> Eg scientific notation encodes uncertainty in how many (or rather, how few) significant figures are present, for which we must know how big a jump each digit is.
+> Note that this also means we cannot throw away trailing zeros by compressing floats that are multiples of the radix.
+> Eg`1.00e2 /= 1.0e2` because the significant figures are different, and this is represented with `Flo(+, 100, base10, 0) /= Flo(+, 10, base10, 1)`.
+> It is easy for specific downstream types to _later_ perform set quotient operations and recover additional equivalences.
+
+> Rationale
+>
+> TODO multiline literals retain their lines as separated in the source
+
+Valid CSTs
+----------
+
+Valid CSTs are just the unvalidated CSTs from the last section, but subject to a number of restrictions.
+The idea is that valid CSTs will always be serializable, while some unvalidated CSTs do no correspond to a serialized form.
+In the sequent, a CST simpliciter refers to a valid CST, as opposed to the unvalidated CST above.
+
+CSTs are subject to a precedence restriction.
+A CST of a particular precedence level (given in descending order in the table below) MUST NOT directly contain a CST of the same or higher precedence level.
+The `Enclose` constructor is not so restricted, and so MAY directly contain any CST.
+Additionally, while the `Template` constructor may appear anywhere, it may only directly contain CSTs of precedence `List Space` or lower.
+- `List Semicolon`
+- `List Comma`
+- `Pair`
+- `List Space`
+- `List Dot`
+- `List Colon`
+
+Additionally, the location of `Blocks` and `MultilineLiteral`s is restricted:
+- they MUST NOT the direct child of a CST with precedence, except as the last child (for clarity: they are allowed as the second/value child of a pair)
+- blocks MUST NOT the direct child of a CST of precedence lower than space
+- multiline literals MUST NOT be the direct child of an `Enclose`
+
+Finally a couple miscellaneous restrictions:
+- a `Template` cannot directly contain a CST of precedence higher than space, nor a `Block` or `MultilineLiteral`
+- `Symbols` made of dots or colons cannot appear as the direct child of a CST of precedence lower than space
+- the direct children of a `List Colon` must be symbols, except the last which may also be a literal or a template
+
+These restrictions can be formalized as a set of dependent types, which we give below.
+However, these types are somewhat cumobersome to work with in general,
+  so we tend to work with the type of unvalidated CSTs, with the assumption the given CST is valid.
+They are included here to formalize the restrictions given in natural-language above.
+
+```
+Literal ::= IntegerLiteral {+,-} ℕ
+         |  FloatingLiteral {+,-} ℕ {2,8,10,16} ℤ
+         |  StringLiteral Text
+         |  MultilineLiteral Text*
+
+SymbolType = Standard | Punct
+Symbol ::= Symbol(Text) :: Symbol Standard  // text matches /[:id:]+/ - /[+-]?\d.*/
+        |  Punct( Text) :: Symbol Punct     // text matches /[.:]{2,3}/
+
+type NumPrec = Fin(8)
+data Prec
+  = Prec NumPrec // written simply as an integer
+  | Block NumPrec
+
+data CST(p: Prec)
+  ////// true CST data //////
+  ::= Semicolon(        CST(6)*     , CST Block(6)) :: CST 7
+   |  Comma(            CST(5)*     , CST Block(5)) :: CST 6
+   |  Pair(             CST(4)      , CST Block(4)) :: CST 5
+   |  Space(            CST(3)*     , CST Block(3)) :: CST 4
+   |  Block(            (∃x. CST x)+              ) :: CST Block(3)
+   |  Dot(              CST(2)*     , CST Block(2)) :: CST 3
+   |  SymbolPunct(      Symbol Punct              ) :: CST 3
+   |  Colon(            CST(0)*     , CST Block(1)) :: CST 2
+   |  Enclose(Encloser, (∃n. CST Punct(n))?       ) :: CST 2
+   |  Template(         Text, (CST 4, Text)+      ) :: CST 1
+   |  MultilineLiteral( Text*                     ) :: CST Block(1)
+   |  Literal(          Literal                   ) :: CST 1
+   |  Symbol(           Symbol Standard           ) :: CST 0
+  ////// cumulative hierarchies //////
+   |  ∀x, x < y. NumHier(    CST Prec(x)  ) :: CST Prec(y)
+   |  ∀x, x < y. BlockyHier( CST Block(x) ) :: CST Block(y)
+   |  ∀n.        CrossHier(  CST Prec(n)  ) :: CST Block(n)
+
+FIXME what happens if I open an encloser and then start a multiline on the same line?
+
+TODO if I decide `Enclose` can occur qualified, then I'll move it to CST 1
 ```
 
 Grammar
 =======
+
+From CSTs to Lexemes
+--------------------
+
+This map is defined using a number of "productions" mapping a left-hand side (LHS) to a right-hand side (RHS).
+The LHS is a CST schema (a CST with possibly some constructor arguments replaced by variables, which are then bound in the RHS).
+The RHS is a sequence of CST schemas and token schemas, with a token type that we give later.
+
+TODO token type
+
+TODO productions
 
 The Structure of Input Lines
 ----------------------------
