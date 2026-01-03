@@ -215,6 +215,7 @@ parseBracketedIndent = do
   open <- indent
   inner <- parseCst `sepBy1` nextline
   close <- dedent
+  _ <- nextline
   pure $ Block (open <> close) inner
 
 ------ terminals ------
@@ -376,10 +377,12 @@ seqP getF getX = P $ \st0 -> do
 altP :: Parser a -> Parser a -> Parser a
 altP a b = P $ \st -> case unP a st of
   ok@(Ok _ _ _) -> ok
-  err@(Err _ st') -> case st' of
+  err@(Err errs st') -> case st' of
     Unconsumed -> case unP b st of
       Ok _ x st'' -> Ok [] x st''
-      err' -> err >> err'
+      Err errs' st'' -> case st'' of
+        Unconsumed -> Err (errs ++ errs') Unconsumed
+        Consumed _ -> Err (errs ++ errs') st''
     Consumed _ -> err
 
 -- Backtracking

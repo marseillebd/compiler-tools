@@ -33,3 +33,7 @@ a(x).b[i](y)
 foo bar \
   a b
   c
+
+function thing() {
+  console.log("test")
+}
