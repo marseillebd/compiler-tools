@@ -4,6 +4,8 @@ module Language.CCS.Parser
   ( CCS(..)
   , CST(..)
   , Atom(..)
+  , Encloser(..)
+  , Separator(..)
   , parse
   , ParseError(..)
   ) where
