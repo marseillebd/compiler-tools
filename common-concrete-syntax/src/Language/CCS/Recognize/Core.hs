@@ -1,3 +1,5 @@
+{-# LANGUAGE Arrows #-}
+
 module Language.CCS.Recognize.Core
   ( type (~>)
   , Recognize
@@ -10,23 +12,32 @@ module Language.CCS.Recognize.Core
   , theSpan
   , atom
   , template
-  , parens, brackets, braces
+  , enclosed
   , indented
-  , semicolons, commas, pair, spaced, chained, colons
-  , symbol , intLit , floLit , strLit, multilineLit
+  , separated, pair
+  , symbol, intLit, floLit, strLit, multilineLit
+
+  , maybeR
+  , manyR
+  , someR
   ) where
 
 import Prelude hiding ((.), fail)
 
-import Control.Arrow (Arrow (..), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), (>>>))
+import Control.Arrow (Arrow (arr, (***)), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), returnA)
 import Control.Category (Category (..))
-import Data.List.NonEmpty (NonEmpty)
+import Data.Bifunctor (second)
+import Data.Either (partitionEithers)
+import Data.Functor ((<&>))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Profunctor (Profunctor (..))
 import Data.Text (Text)
 import Language.CCS.Lexer.Assemble (FloLit(..))
 import Language.CCS.Parser (CST(..), Atom(..), Encloser(..), Separator(..))
 import Language.Location (Span)
 import Language.Text (SrcText)
+
+import qualified Data.List.NonEmpty as NE
 
 ------------------------------------
 ------ Preliminary Data Types ------
@@ -78,8 +89,8 @@ template = R $ \_ -> \case
   other -> _fail other.span "expecting string template"
 
 -- TODO enclose (round, square, curly)
-_enclosed :: Encloser -> CST ~> Maybe CST
-_enclosed e = R $ \_ -> \case
+enclosed :: Encloser -> CST ~> Maybe CST
+enclosed e = R $ \_ -> \case
   Enclose loc e' inner | e == e' -> Right (loc, inner)
   other -> _fail other.span $ "expecting " <> expect
   where
@@ -87,45 +98,28 @@ _enclosed e = R $ \_ -> \case
     Round -> "parentheses"
     Square -> "square brackets"
     Curly -> "curly braces"
-parens, brackets, braces :: CST ~> Maybe CST
-parens = _enclosed Round
-brackets = _enclosed Square
-braces = _enclosed Curly
 
 indented :: CST ~> NonEmpty CST
 indented = R $ \_ -> \case
   Block loc inner -> Right (loc, inner)
   other -> _fail other.span "expecting indented block"
 
-semicolons :: CST ~> NonEmpty CST
-semicolons = R $ \_ -> \case
-  List loc Semicolon xs -> Right (loc, xs)
-  other -> _fail other.span "expecting semicolon-separated list"
-
-commas :: CST ~> NonEmpty CST
-commas = R $ \_ -> \case
-  List loc Comma xs -> Right (loc, xs)
-  other -> _fail other.span "expecting comma-separated list"
+separated :: Separator -> CST ~> NonEmpty CST
+separated s = R $ \_ -> \case
+  List loc s' xs | s == s' -> Right (loc, xs)
+  other -> _fail other.span $ "expecting " <> msg
+  where
+  msg = case s of
+    Semicolon -> "semicolon-separated list"
+    Comma -> "comma-separated list"
+    Space -> "space-separated trees"
+    Chain -> "chained trees"
+    Qualify -> "colon-separated atoms"
 
 pair :: CST ~> (CST, CST)
 pair = R $ \_ -> \case
   Pair loc k v -> Right (loc, (k, v))
   other -> _fail other.span "expecting colon-separated pair"
-
-spaced :: CST ~> NonEmpty CST
-spaced = R $ \_ -> \case
-  List loc Space xs -> Right (loc, xs)
-  other -> _fail other.span "expecting space-separated trees"
-
-chained :: CST ~> NonEmpty CST
-chained = R $ \_ -> \case
-  List loc Chain xs -> Right (loc, xs)
-  other -> _fail other.span "expecting chained trees"
-
-colons :: CST ~> NonEmpty CST
-colons = R $ \_ -> \case
-  List loc Qualify xs -> Right (loc, xs)
-  other -> _fail other.span "expecting colon-separated atoms"
 
 ------ Recognize Atoms ------
 
@@ -213,3 +207,35 @@ instance ArrowApply Recognize where
 
 unknownFail :: a ~> b
 unknownFail = R $ \ctx _ -> Left (ErrorsOne (Error "unknown error" ctx))
+
+-------------------------
+------ Combinators ------
+-------------------------
+
+-- TODO I had hooped that most of these would be implemented as simple arrows.,
+-- but I can't easily find them, so I'll write them in the core for my own speed.
+-- Perhaps someday I'll know this stuff enough to improve the offerings in `base`.
+
+maybeR :: b -> (CST ~> b) -> Maybe CST ~> b
+maybeR z f = R $ \cxt -> \case
+  Nothing -> Right (cxt, z)
+  Just x -> unR f x.span x
+
+-- | More like a `map`, but it's not a fullly-general over functors or traversables, and I want one that works over nonempty, probablly
+manyR :: (CST ~> b) -> [CST] ~> [b]
+manyR (R p) = R $ \cxt xs ->
+  let (errs, ys) = partitionEithers $ xs <&> \x ->
+        second snd $ p x.span x
+   in case errs of
+    [] -> Right (cxt, ys)
+    e : es -> Left $ foldr (flip (<>)) e es
+
+-- | More like a `map`, but it's not a fullly-general over functors or traversables, and I want one that works over nonempty, probablly
+someR :: (CST ~> b) -> NonEmpty CST ~> NonEmpty b
+someR f = proc xs -> do
+  ys0 <- manyR f -< NE.toList xs
+  case ys0 of
+    [] -> unknownFail -< ys0
+    y : ys -> returnA -< y :| ys
+
+

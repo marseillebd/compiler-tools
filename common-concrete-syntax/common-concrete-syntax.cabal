@@ -33,6 +33,7 @@ library
       Language.CCS.Lexer.Indentation
       Language.CCS.Lexer.Sandhi
       Language.CCS.Parser
+      Language.CCS.Recognize
       Language.CCS.Recognize.Core
     -- other-modules:
     -- other-extensions:
