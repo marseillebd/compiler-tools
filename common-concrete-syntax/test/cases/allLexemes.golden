@@ -13,10 +13,10 @@ TooManyDots: 48:1--48:5
 TooManyColons: 48:6--48:10
 Atom 2:3--2:12 (Symbol "badIndent")
 Atom 3:6--3:19 (Symbol "moreBadIndent")
-Atom 5:1--5:2 (IntegerLiteral +1)
+Atom 5:1--5:2 (IntegerLiteral 1)
 Nextline 6:1--6:1
-Atom 6:1--6:3 (IntegerLiteral -4)
-Atom 6:4--6:6 (IntegerLiteral +3)
+Atom 6:1--6:3 (IntegerLiteral (-4))
+Atom 6:4--6:6 (IntegerLiteral 3)
 Nextline 7:1--7:1
 Atom 7:1--7:5 (FloatingLiteral +102x10^-2)
 Nextline 8:1--8:1

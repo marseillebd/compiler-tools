@@ -317,7 +317,7 @@ Valid (and some invalid) CSS trees can be represented by the `CST` abstract data
 
 ```
 Atom ::= Symbol Text                              // but the text has requirements: matches /[:id:]+|[.:]{2,3}/ - /[+-]?\d.*/
-      |  IntegerLiteral {+,-} ℕ                   // An integer literal, or negative zero
+      |  IntegerLiteral ℤ                         // An integer literal
       |  FloatingLiteral {+,-} ℕ {2,8,10,16} ℤ    // binary floating-point literal, of the form ±a * r^b
       |  StringLiteral Text                       // A string literal on one line
       |  MultilineLiteral Text*                   // A multi-line string literal, preserving original line breaks
@@ -341,13 +341,6 @@ Separator ::= Semicolon    // for separating by semicolons
 ```
 
 > Rationale
->
-> The sign is kept for floating point literals because IEE754 says negative zero is a thing.
-> It is kept for integer literals because
->   a) they could be silently converted to floating point by downstream, and
->   b) we may for some reason want a signed zero for simulating sign-magnitude arithmetic
->     or just some obscure math concept like the line with two origins.
-> I suspect most downstreams will ignore the sign for zero magnitude integers.
 >
 > The radix is kept for floating point literals because it may be an important part of indicating precision.
 > Eg scientific notation encodes uncertainty in how many (or rather, how few) significant figures are present, for which we must know how big a jump each digit is.

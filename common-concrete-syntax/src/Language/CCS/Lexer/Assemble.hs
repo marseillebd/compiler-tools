@@ -1,7 +1,6 @@
 module Language.CCS.Lexer.Assemble
   ( CCS(..)
   , Atom(..)
-  , IntLit(..)
   , FloLit(..)
   , Token(..)
   , TemplateType(..)
@@ -35,7 +34,7 @@ import qualified Streaming.Prelude as S
 (CCS from L0:CCS
   (+ Atom
     (Symbol Text)
-    (IntegerLiteral IntLit)
+    (IntegerLiteral Integer)
     (FloatingLiteral FloLit)
     (StringLiteral Text)
     (MultilineLiteral (* SrcText) SrcText)
@@ -64,20 +63,6 @@ import qualified Streaming.Prelude as S
   )
 )
 |]
-
--- FIXME I can also handle dot/colon sequences here also
-
-data IntLit = IntLit
-  { signI :: Sign
-  , magI :: Integer -- NOTE should be Natural
-  }
-  deriving (Eq)
-
-instance Show IntLit where
-  show it = concat
-    [ case it.signI of { Positive -> "+"; Negative -> "-" }
-    , show it.magI
-    ]
 
 data FloLit
   = FloLit
@@ -211,10 +196,9 @@ number
   -> m Token
 -- integer literal
 number loc sign _ i Nothing Nothing = pure $
-  Atom loc $ IntegerLiteral IntLit
-    { signI = sign
-    , magI = i
-    }
+  Atom loc $ IntegerLiteral $ case sign of
+    Positive -> i
+    Negative -> negate i
 -- floating point literal without exponent
 number loc sign radix whole (Just (frac, len)) Nothing = do
   when (len == 0) $
