@@ -9,18 +9,13 @@ module Language.CCS.Recognize
 
 import Prelude hiding (id, (.), fail, lines)
 
-import Control.Arrow (Arrow (..), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), (>>>), (<<<), returnA)
+import Control.Arrow (Arrow (..), ArrowPlus (..), (<<<), returnA)
 import Data.Semigroup (Semigroup(sconcat))
-import Control.Category (Category (..))
 import Data.List.NonEmpty (NonEmpty)
-import Data.Profunctor (Profunctor (..))
 import Data.Text (Text)
-import Language.CCS.Lexer.Assemble (FloLit(..))
-import Language.CCS.Parser (CST(..), Atom(..), Encloser(..), Separator(..))
-import Language.Location (Span)
-import Language.Text (SrcText)
+import Language.CCS.Parser (CST(..), Encloser(..), Separator(..))
 import Language.CCS.Recognize.Core (type (~>), enclosed, indented, separated, fail)
-import Language.CCS.Recognize.Core (maybeR, manyR, someR)
+import Language.CCS.Recognize.Core (maybeR, someR)
 
 import qualified Data.List.NonEmpty as NE
 

@@ -7,6 +7,7 @@ module Language.CCS.Lexer.NoiseReduction
   , DeleteComment(..)
   , RaiseIllegalBytes(..)
   , WhitespaceError(..)
+  , InconsistentNewlines(..)
   ) where
 
 import Control.Monad (when)

@@ -24,6 +24,7 @@ common common
 library
     import:           common
     exposed-modules:
+      Language.CCS
       Language.CCS.Error
       Language.CCS.Lexer
       Language.CCS.Lexer.Assemble

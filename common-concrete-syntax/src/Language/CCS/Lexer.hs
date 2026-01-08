@@ -8,6 +8,7 @@ module Language.CCS.Lexer
   , lexemesToCsts
   , cstsFrom
   , csts
+  , LexerError
   , RaiseIllegalBytes(..)
   , DeleteComment(..)
   , WhitespaceError(..)
