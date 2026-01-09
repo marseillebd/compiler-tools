@@ -33,7 +33,8 @@ module Language.CCS
   , Context , Error(..) , Errors
 
   , Category(id, (.))
-  , Arrow(arr, (***)), ArrowApply(..), ArrowChoice(..), ArrowPlus(..), ArrowZero(..), returnA
+  , Arrow(..), ArrowApply(..), ArrowChoice(..), ArrowPlus(..), ArrowZero(..), returnA
+  , (<<<), (>>>)
   , Profunctor(..)
   , maybeR
   , manyR
@@ -57,7 +58,7 @@ import Prelude hiding (fail, id, (.))
 import Language.CCS.Recognize.Core
 
 import Language.CCS.Recognize (parenList, squareList, curlyBlock, parens, brackets, braces, semicolons, commas, spaced, chained, colons, unconsR, nilR)
-import Control.Arrow (Arrow (arr, (***)), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), returnA)
+import Control.Arrow (Arrow (..), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), returnA, (<<<), (>>>))
 import Control.Category (Category (..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Profunctor (Profunctor (..))

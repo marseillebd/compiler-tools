@@ -11,7 +11,7 @@ import Prelude hiding (id, (.), fail, lines)
 
 import Control.Arrow (Arrow (..), ArrowPlus (..), (<<<), returnA)
 import Data.Semigroup (Semigroup(sconcat))
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Text (Text)
 import Language.CCS.Parser (CST(..), Encloser(..), Separator(..))
 import Language.CCS.Recognize.Core (type (~>), enclosed, indented, separated, fail)
@@ -40,20 +40,20 @@ import qualified Data.List.NonEmpty as NE
 parenList :: CST ~> [CST]
 parenList = proc top -> do
   inner <- parens -< top
-  elems <- maybeR [] (NE.toList <$> commas <+> indentedCommas) -< inner
+  elems <- maybeR [] (NE.toList <$> commas <+> indentedCommas <+> arr (:|[])) -< inner
   returnA -< elems
 
 squareList :: CST ~> [CST]
 squareList = proc top -> do
   inner <- brackets -< top
-  elems <- maybeR [] (NE.toList <$> commas <+> indentedCommas) -< inner
+  elems <- maybeR [] (NE.toList <$> commas <+> indentedCommas <+> arr (:|[])) -< inner
   returnA -< elems
 
 -- FIXME allow bare indent as well
 curlyBlock :: CST ~> [CST]
 curlyBlock = proc top -> do
   inner <- braces -< top
-  elems <- maybeR [] (NE.toList <$> semicolons <+> indentedSemicolons) -< inner
+  elems <- maybeR [] (NE.toList <$> semicolons <+> indentedSemicolons <+> arr (:|[])) -< inner
   returnA -< elems
 
 indentedCommas :: CST ~> NonEmpty CST

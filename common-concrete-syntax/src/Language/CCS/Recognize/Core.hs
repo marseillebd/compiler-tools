@@ -55,9 +55,7 @@ newtype Recognize a b = R { unR ::
 
 type Context = Span -- TODO perhaps this needs to be a bit more 
 
-data Errors = ErrorsOne Error | ErrorsPlus Errors Errors
-instance Semigroup Errors where
-  (<>) = ErrorsPlus
+type Errors = NonEmpty Error
 data Error = Error
   { message :: Text
   , context :: Context
@@ -74,7 +72,7 @@ theSpan :: a ~> Span
 theSpan = R $ \ctx _ -> Right (ctx, ctx)
 
 _fail :: Context -> Text -> Either Errors a
-_fail ctx msg = Left $ ErrorsOne $ Error msg ctx
+_fail ctx msg = Left $ NE.singleton $ Error msg ctx
 
 ------ Recognize CSTs ------
 
@@ -151,7 +149,7 @@ multilineLit = R $ \ctx -> \case
 ------ Structural ------
 
 fail :: Text -> a ~> b
-fail msg = R $ \ctx _ -> Left (ErrorsOne (Error msg ctx))
+fail msg = R $ \ctx _ -> Left (NE.singleton (Error msg ctx))
 
 instance Functor (Recognize a) where
   fmap f (R p) = R $ \ctx x -> case p ctx x of
@@ -191,7 +189,7 @@ instance ArrowPlus Recognize where
     Right success -> Right success
     Left errLeft -> case q ctx x of
       Right success -> Right success
-      Left errRight -> Left $! (errLeft <> errRight)
+      Left errRight -> Left $! (errRight <> errLeft)
 
 instance ArrowChoice Recognize where
   (R p) +++ (R q) = R $ \ctx -> \case
@@ -206,7 +204,7 @@ instance ArrowApply Recognize where
   app = R $ \ctx (p, x) -> unR p ctx x
 
 unknownFail :: a ~> b
-unknownFail = R $ \ctx _ -> Left (ErrorsOne (Error "unknown error" ctx))
+unknownFail = R $ \ctx _ -> Left (NE.singleton (Error "unknown error" ctx))
 
 -------------------------
 ------ Combinators ------
