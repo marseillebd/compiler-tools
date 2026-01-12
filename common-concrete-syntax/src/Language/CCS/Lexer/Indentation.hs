@@ -4,65 +4,35 @@ module Language.CCS.Lexer.Indentation
   , Atom(..)
   , PunctuationType(..)
   , process
-  , MalformedIndentation(..)
   ) where
 
 import Prelude hiding (lines, init)
 
+import Language.CCS.Types.Indentation
+
 import Control.Applicative ((<|>))
 import Control.Monad (forM, unless, replicateM_, void)
 import Data.Text (Text)
-import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unused, unwrapOrPanic_)
-import Language.Location (Span, spanFromPos)
-import Language.Nanopass (deflang, defpass)
+import Language.CCS.Error (ReaderHooks(..), ReaderError(..))
+import Language.CCS.Util (internalError, unused, unwrapOrPanic_)
+import Language.Location (spanFromPos)
+import Language.Nanopass (defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Data.Text as T
-import qualified Language.CCS.Lexer.Assemble as L0
+import qualified Language.CCS.Types.Assemble as L0
 import qualified Language.Text as Src
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
-
-[deflang|
-(CCS from L0:CCS
-  (* Atom
-    (- MultilineLiteral)
-    (+ MultilineLiteral (* SrcText))
-  )
-
-  (* Token
-    (- Eol)
-    (+ Indent Span)
-    (+ Nextline Span)
-    (+ Dedent Span)
-  )
-)
-|]
-
-deriving instance Show Atom
-deriving instance Show Token
-deriving instance Show PunctuationType
-
-instance HasField "span" Token Span where
-  getField (Atom a _) = a
-  getField (StringTemplate a _ _) = a
-  getField (Punctuation a _) = a
-  getField (Whitespace a) = a.span
-  getField (Indent a) = a
-  getField (Nextline a) = a
-  getField (Dedent a) = a
-
-$(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
 _ignore :: ()
 _ignore = unused (XlateI, descendAtomI, descendTokenI, descendPunctuationTypeI)
 
-xlate :: MalformedIndentation m => IndentState -> L0.Token -> m Token
+xlate :: ReaderHooks m => IndentState -> L0.Token -> m Token
 xlate st = descendToken Xlate
   { onAtom = const Nothing
   , onToken = const Nothing
@@ -76,7 +46,7 @@ xlate st = descendToken Xlate
 ------------------
 
 process ::
-  ( MalformedIndentation m
+  ( ReaderHooks m
   )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
@@ -91,7 +61,7 @@ process inp0 = do
 -------------------------
 
 detectIndentation ::
-  ( MalformedIndentation m
+  ( ReaderHooks m
   )
   => IndentState
   -> Stream (Of L0.Token) m r
@@ -118,14 +88,14 @@ detectIndentation st inp0 = S.effect $ S.next inp0 >>= \case
       detectIndentation st rest
   Left r -> pure $ pure r
 
-analyzeIndent :: MalformedIndentation m
+analyzeIndent :: ReaderHooks m
   => IndentState
   -> SrcText
   -> m (Stream (Of Token) m Int)
 analyzeIndent (lvl, ty) ws = do
   let ((indent, newLvl), rest) = unwrapOrPanic_ $ Src.evalParse parseIndent ws
   unless (Src.null rest) $ do
-    raiseLeadingWhitespace rest.span
+    recoverableError $ LeadingWhitespace rest
   pure $ if
     | newLvl == lvl -> do
       yield $ Nextline indent.span
@@ -152,14 +122,14 @@ analyzeIndent (lvl, ty) ws = do
 ------ Initialization ------
 
 findFirstUnindented ::
-  ( MalformedIndentation m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m (Stream (Of L0.Token) m r)
 findFirstUnindented = init
   where
   init inp0 = S.effect $ S.next inp0 >>= \case
     Right (L0.Whitespace ws, rest) -> do
-      raiseUnexpectedIndent ws.span
+      recoverableError $ LeadingWhitespaceBeforeFirstIndent ws
       pure $ loop rest
     Right (L0.Eol _ _, _) -> internalError "found eol at start of file"
     Right (other, inp1) -> pure $
@@ -168,7 +138,7 @@ findFirstUnindented = init
   loop inp0 = S.effect $ S.next inp0 >>= \case
     Right (L0.Eol _ _, inp1) -> S.next inp1 >>= \case
       Right (L0.Whitespace ws, rest) -> do
-        raiseUnexpectedIndent ws.span
+        recoverableError $ LeadingWhitespaceBeforeFirstIndent ws
         pure $ loop rest
       Right (L0.Eol _ _, _) -> internalError "found eol after eol"
       Right (other, inp2) -> pure $
@@ -182,7 +152,7 @@ findFirstUnindented = init
     Left r -> pure $ pure $ pure r
 
 findFirstIndented ::
-  ( MalformedIndentation m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m (Either r (IndentState, Stream (Of L0.Token) m r))
 findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
@@ -191,7 +161,7 @@ findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
     Right (L0.Whitespace ws, rest) -> do
       let (okWs, ty, badWs) = getIndentType ws
       unless (Src.null badWs) $
-        raiseLeadingWhitespace badWs.span
+        recoverableError $ MixedWhitespaceInIndentation badWs
       pure $ do
         yield $ Indent okWs.span
         pure $ Right ((1, ty), rest)
@@ -225,27 +195,31 @@ getIndentType src = case Src.evalParse detect src of
 --------------------------------
 
 xlateMl :: forall m.
-  ( MalformedIndentation m )
+  ( ReaderHooks m )
   => IndentState
   -> [SrcText]
   -> SrcText
   -> m Atom
 xlateMl (0, _) body predelim = do
   unless (Src.null predelim) $
-    raiseUnexpectedIndent predelim.span
+    recoverableError $ ExcessIndentationBeforeMultilineClose predelim
   pure $ MultilineLiteral body
 xlateMl st body predelim = do
   body' <- forM body stripIndent
   predelim' <- stripIndent predelim
   unless (Src.null predelim') $
-    raiseLeadingWhitespace predelim'.span
+    recoverableError $ ExcessIndentationBeforeMultilineClose predelim'
   pure $ MultilineLiteral body'
   where
   stripIndent :: SrcText -> m SrcText
   stripIndent src = case Src.evalParse parseIndent src of
     Just (Right (), rest) -> pure rest
     Just (Left tooLittle, rest) -> do
-      raiseInsufficientIndentation tooLittle.span
+      recoverableError $ TooLittleIndentationInMultiline
+        { theTooLittleIndentation = tooLittle
+        -- , multilineStartsWith = delim
+        , expectedIndentation = indentString st
+        }
       pure rest
     Nothing -> internalError "xlateMl.stripIndent failed"
   parseIndent :: Src.Parse (Either SrcText ())
@@ -273,12 +247,3 @@ indentString (n, Spaces m) = T.replicate (n * m) " "
 indentChar :: IndentState -> Char
 indentChar (_, Tab) = '\t'
 indentChar (_, Spaces _) = ' '
-
---------------------
------- Errors ------
---------------------
-
-class Monad m => MalformedIndentation m where
-  raiseUnexpectedIndent :: Span -> m ()
-  raiseInsufficientIndentation :: Span -> m ()
-  raiseLeadingWhitespace :: Span -> m ()

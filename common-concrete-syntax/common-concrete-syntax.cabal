@@ -28,15 +28,20 @@ library
       Language.CCS.Error
       Language.CCS.Lexer
       Language.CCS.Lexer.Assemble
-      Language.CCS.Lexer.Decode
-      Language.CCS.Lexer.NoiseReduction
       Language.CCS.Lexer.Cover
+      Language.CCS.Lexer.Decode
       Language.CCS.Lexer.Indentation
+      Language.CCS.Lexer.NoiseReduction
       Language.CCS.Lexer.Sandhi
       Language.CCS.Parser
       Language.CCS.Recognize
       Language.CCS.Recognize.Core
-    -- other-modules:
+      Language.CCS.Util
+    other-modules:
+      Language.CCS.Types.Assemble
+      Language.CCS.Types.Indentation
+      Language.CCS.Types.NoiseReduction
+      Language.CCS.Types.Sandhi
     -- other-extensions:
     build-depends:
       , nanopass >=0.0.3.3

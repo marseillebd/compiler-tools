@@ -6,56 +6,25 @@ module Language.CCS.Lexer.Sandhi
   , TemplateType(..)
   , BracketType(..)
   , process
-  , SandhiError(..)
   ) where
 
 import Prelude hiding (lines, init)
 
+import Language.CCS.Types.Sandhi
+
 import Control.Monad (when, unless)
-import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unused)
-import Language.CCS.Lexer.Assemble (TemplateType(..))
+import Language.CCS.Util (internalError, unused)
+import Language.CCS.Types.Assemble (TemplateType(..))
 import Language.CCS.Lexer.Cover (BracketType(..))
 import Language.Location (Span, spanFromPos)
-import Language.Nanopass (deflang, defpass)
+import Language.Nanopass (defpass)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
+import Language.CCS.Error (ReaderHooks(..), ReaderStyle(..), ReaderError(..))
 
-import qualified Language.CCS.Lexer.Indentation as L0
+import qualified Language.CCS.Types.Indentation as L0
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
-
-[deflang|
-(CCS from L0:CCS
-  (* Token
-    (- Whitespace)
-  )
-  (* PunctuationType
-    (- Dot) (- Dots2) (- Dots3)
-    (+ StartBlock)
-    (+ Chain)
-    (- Colon) (- Colons2) (- Colons3)
-    (+ Pair) (+ Qualify)
-    (- Backslash)
-    (+ ContinueLine)
-  )
-)
-|]
-
-deriving instance Show Atom
-deriving instance Show Token
-deriving instance Show PunctuationType
-deriving instance Eq PunctuationType
-
-instance HasField "span" Token Span where
-  getField (Atom a _) = a
-  getField (StringTemplate a _ _) = a
-  getField (Punctuation a _) = a
-  getField (Indent a) = a
-  getField (Nextline a) = a
-  getField (Dedent a) = a
-
-$(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
@@ -88,14 +57,14 @@ xlate = descendTokenI XlateI
 ------ Main ------
 ------------------
 
-process :: (SandhiError m)
+process :: (ReaderHooks m)
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 process = mapWithLookaround $ \(prev, here, next) -> case here of
 -- most tokens are just atoms, and we pass on to atomSandhi
   L0.Atom _ _ -> atomSandhi prev here next
   L0.StringTemplate _ ty _ -> case ty of
-    -- we only check atomSandi on the open templates b/c we raiseCrammedTokens only when looking backwards
+    -- we only check atomSandi on the open templates b/c we raise CrammedTokens only when looking backwards
     OpenTemplate -> atomSandhi prev here next
     _ -> pure [xlate here]
   L0.Punctuation spn ty -> case ty of
@@ -118,7 +87,7 @@ process = mapWithLookaround $ \(prev, here, next) -> case here of
          , isSpace next
           -> pure [xlate here]
          | otherwise -> do
-          raiseUnexpectedDot here.span
+          recoverableError $ UnexpectedDot here.span prev next
           pure []
     L0.Colon ->
       if | isIndent next -> pure [Punctuation spn StartBlock]
@@ -126,37 +95,41 @@ process = mapWithLookaround $ \(prev, here, next) -> case here of
          | isSpace next -> pure [Punctuation spn Pair]
          | isSymbol prev && isAtom ViewFromLeft next -> pure [Punctuation spn Qualify]
          | otherwise -> do
-          raiseUnexpectedColon spn
+          recoverableError $ UnexpectedColon here.span prev next
           pure []
     L0.Comma -> separatorSandhi prev (spn, Comma) next
     L0.Semicolon -> separatorSandhi prev (spn, Semicolon) next
     L0.Backslash -> do
       case next of
         Just (L0.Indent _) -> pure ()
-        _ -> raiseUnexpectedBackslash here.span
+        _ -> recoverableError $ UnexpectedBackslash here.span next
       pure [xlate here]
 -- and then we just get boring whitespace tokens
   L0.Whitespace _ -> pure []
   L0.Indent _ -> do
     unless (canStartIndent prev) $ do
-      raiseBareIndent here.span
+      recoverableError $ UnexpectedIndent here.span prev
     pure [xlate here]
   L0.Nextline _ -> pure [xlate here]
   L0.Dedent _ -> pure [xlate here]
 
 type Process m a = Maybe L0.Token -> a -> Maybe L0.Token -> m [Token]
 
-atomSandhi :: SandhiError m => Process m L0.Token
-atomSandhi prev atom _ = do
-  when (isAtom ViewFromRight prev || isClose prev) $ do
-    raiseCrammedTokens (spanFromPos atom.span.start)
+atomSandhi :: ReaderHooks m => Process m L0.Token
+atomSandhi (Just prev) atom _ = do
+  when (isAtom ViewFromRight (Just prev) || isClose (Just prev)) $ do
+    recoverableError $ CrammedTokens (spanFromPos atom.span.start) prev atom
   pure [xlate atom]
+atomSandhi Nothing atom _ = pure [xlate atom]
 
-separatorSandhi :: SandhiError m => Process m (Span, PunctuationType)
-separatorSandhi _ (spn, ty) next = do
-  unless (isSpace next) $ do
-    raiseExpectedWhitespace (spanFromPos spn.end)
-  pure [Punctuation spn ty]
+separatorSandhi :: ReaderHooks m => Process m (Span, PunctuationType)
+separatorSandhi _ (spn, ty) next_m = do
+  let sep = Punctuation spn ty
+  case next_m of
+    Just next | not $ isSpace next_m -> do
+      styleNote $ ExpectingWhitespaceAfterSeparator spn sep next
+    _ -> pure ()
+  pure [sep]
 
 ------ Recursion Relation ------
 
@@ -238,16 +211,3 @@ canStartIndent (Just tok) = case tok of
   L0.Punctuation _ (L0.Open _) -> True
   L0.Punctuation _ L0.Backslash -> True
   _ -> False
-
---------------------
------- Errors ------
---------------------
-
-class Monad m => SandhiError m where
-  raiseCrammedTokens :: Span -> m ()
-  raiseExpectedWhitespace :: Span -> m ()
-  raiseBareIndent :: Span -> m ()
-  raiseUnexpectedWhitespace :: Span -> m ()
-  raiseUnexpectedDot :: Span -> m ()
-  raiseUnexpectedColon :: Span -> m ()
-  raiseUnexpectedBackslash :: Span -> m ()

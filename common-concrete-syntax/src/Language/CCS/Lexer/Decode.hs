@@ -9,7 +9,7 @@ module Language.CCS.Lexer.Decode
 import Prelude hiding (lines)
 
 import Data.Function ((&))
-import Language.CCS.Error (placeholder, internalError)
+import Language.CCS.Util (placeholder, internalError)
 import Language.Location (Pos, startPos, incLine)
 import Language.Text (SrcText)
 

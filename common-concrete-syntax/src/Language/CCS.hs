@@ -18,16 +18,9 @@ module Language.CCS
   , cstsFrom, csts
   , tokensFrom, tokens
   -- TODO error classes
-  , LexerError
-  , ParseError(..)
-  , RaiseIllegalBytes(..)
-  , DeleteComment(..)
-  , MalformedPunctuation(..)
-  , MalformedNumber(..)
-  , MalformedString(..)
-  , MalformedIndentation(..)
-  , WhitespaceError(..), InconsistentNewlines(..)
-  , SandhiError(..)
+  , ReaderStyle(..)
+  , ReaderError(..)
+  , ReaderHooks(..)
   -- recognizers
   , Recognize, type (~>) , run
   , Context , Error(..) , Errors
@@ -57,20 +50,17 @@ import Prelude hiding (fail, id, (.))
 
 import Language.CCS.Recognize.Core
 
-import Language.CCS.Recognize (parenList, squareList, curlyBlock, parens, brackets, braces, semicolons, commas, spaced, chained, colons, unconsR, nilR)
 import Control.Arrow (Arrow (..), ArrowApply (..), ArrowChoice (..), ArrowPlus (..), ArrowZero (..), returnA, (<<<), (>>>))
 import Control.Category (Category (..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Profunctor (Profunctor (..))
 import Data.Text (Text)
+import Language.CCS.Error (ReaderStyle(..), ReaderError(..), ReaderHooks(..))
 import Language.CCS.Lexer.Assemble (FloLit(..))
-import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
 import Language.CCS.Lexer.Cover (Sign(..), Radix(..))
-import Language.CCS.Lexer (cstsFrom, csts, tokensFrom, tokens, LexerError)
+import Language.CCS.Lexer (cstsFrom, csts, tokensFrom, tokens)
 import Language.CCS.Lexer.Decode (EolType(..))
-import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
-import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..), InconsistentNewlines(..))
-import Language.CCS.Lexer.Sandhi (SandhiError(..))
-import Language.CCS.Parser (CCS(..), CST(..), Atom(..), Encloser(..), Separator(..), ParseError(..))
+import Language.CCS.Parser (CCS(..), CST(..), Atom(..), Encloser(..), Separator(..))
+import Language.CCS.Recognize (parenList, squareList, curlyBlock, parens, brackets, braces, semicolons, commas, spaced, chained, colons, unconsR, nilR)
 import Language.Location (Span, Pos, startPos)
 import Language.Text (SrcText)

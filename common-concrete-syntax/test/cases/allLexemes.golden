@@ -1,16 +1,17 @@
-UnexpectedIndent: 2:1--2:3
-UnexpectedIndent: 3:1--3:6
-CrammedTokens: 3:6--3:6
-CrammedTokens: 5:1--5:1
-TrailingWhitespace: 7:5--7:7
-UnexpectedExponent: 8:1--8:6
-CrammedTokens: 16:7--16:7
-IllegalBytesOrChars: 27:8--27:11 "end"
-BareIndent: 31:1--31:5
-InsufficientIndentation: 38:1--38:2
-LeadingWhitespace: 40:3--40:6
-TooManyDots: 48:1--48:5
-TooManyColons: 48:6--48:10
+LeadingWhitespaceBeforeFirstIndent 2:1--2:3 "  "
+LeadingWhitespaceBeforeFirstIndent 3:1--3:6 "     "
+CrammedTokens {errorLoc = 3:6--3:6, beforeCrammed = Atom 2:3--2:12 (Symbol "badIndent"), afterCrammed = Atom 3:6--3:19 (Symbol "moreBadIndent")}
+CrammedTokens {errorLoc = 5:1--5:1, beforeCrammed = Atom 3:6--3:19 (Symbol "moreBadIndent"), afterCrammed = Atom 5:1--5:2 (IntegerLiteral 1)}
+TrailingWhitespace 7:5--7:7 "  "
+InvalidExponentOnInteger 8:1--8:6
+CrammedTokens {errorLoc = 16:7--16:7, beforeCrammed = Atom 16:1--16:7 (FloatingLiteral -2x2^-1), afterCrammed = Atom 16:7--16:9 (Symbol "e1")}
+IllegalBytesOrChars 27:8--27:11 "end"
+UnexpectedIndent {errorLoc = 31:1--31:5, beforeIndent = Just (Atom 30:3--30:7 (Symbol "pass"))}
+TooLittleIndentationInMultiline {theTooLittleIndentation = 38:1--38:2 " ", expectedIndentation = "  "}
+ExcessIndentationBeforeMultilineClose 40:3--40:6 "   "
+TooManyColons 48:1--48:5 "...."
+TooManyColons 48:6--48:10 "::::"
+ExpectingWhitespaceAfterSeparator {styleLoc = 50:2--50:3, theSeparator = Punctuation 50:2--50:3 Comma, afterSeparator = Atom 50:3--50:4 (Symbol "b")}
 Atom 2:3--2:12 (Symbol "badIndent")
 Atom 3:6--3:19 (Symbol "moreBadIndent")
 Atom 5:1--5:2 (IntegerLiteral 1)
@@ -100,3 +101,7 @@ Atom 47:5--47:11 (Symbol "triple")
 Nextline 48:1--48:1
 Atom 48:1--48:5 (Symbol "...")
 Atom 48:6--48:10 (Symbol ":::")
+Nextline 50:1--50:1
+Atom 50:1--50:2 (Symbol "a")
+Punctuation 50:2--50:3 Comma
+Atom 50:3--50:4 (Symbol "b")

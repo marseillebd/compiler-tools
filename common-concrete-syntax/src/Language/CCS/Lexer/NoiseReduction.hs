@@ -4,20 +4,16 @@ module Language.CCS.Lexer.NoiseReduction
   , StrToken(..)
   , PunctuationType(..)
   , pipeline
-  , DeleteComment(..)
-  , RaiseIllegalBytes(..)
-  , WhitespaceError(..)
-  , InconsistentNewlines(..)
   ) where
+
+import Language.CCS.Types.NoiseReduction
 
 import Control.Monad (when)
 import Data.Function ((&))
-import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unused)
+import Language.CCS.Error (ReaderStyle(..), ReaderError(..), ReaderHooks(..))
 import Language.CCS.Lexer.Decode (EolType(..))
-import Language.Location (Span)
-import Language.Nanopass (deflang, defpass)
-import Language.Text (SrcText)
+import Language.CCS.Util (internalError, unused)
+import Language.Nanopass (defpass)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
@@ -25,41 +21,12 @@ import qualified Language.CCS.Lexer.Cover as L0
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 
-[deflang|
-(CCS from L0:CCS
-  (* Token
-    (- Comment)
-    (- Illegal)
-  )
-  (* StrToken
-    (- IllStr)
-  )
-)
-|]
-
-deriving instance Show Token
-deriving instance Show StrToken
-deriving instance Show PunctuationType
-deriving instance Eq PunctuationType
-
-instance HasField "span" Token Span where
-  getField (Symbol a) = a.span
-  getField (Number a _ _ _ _ _) = a
-  getField (Str a _ _ _) = a
-  getField (MlDelim a) = a.span
-  getField (MlContent a) = a.span
-  getField (MlClose a) = a
-  getField (Punctuation a _) = a
-  getField (Whitespace a) = a.span
-  getField (Eol a _) = a
-
-$(pure [])
 [defpass|(from L0:CCS to CCS)|]
 
 _ignore :: ()
 _ignore = unused (XlateI, descendTokenI, descendStrTokenI, descendPunctuationTypeI)
 
-xlate :: RaiseIllegalBytes m => Xlate m
+xlate :: ReaderHooks m => Xlate m
 xlate = Xlate
   { onToken = \case
       L0.Str l open body close -> Just $ do
@@ -73,10 +40,10 @@ xlate = Xlate
   , onStrTokenIllStr = \_ -> internalError "attempt to translate IllStr token to next lexing stage"
   }
 
-xlateTok :: RaiseIllegalBytes m => L0.Token -> m Token
+xlateTok :: ReaderHooks m => L0.Token -> m Token
 xlateTok = descendToken xlate
 
-xlateStr :: RaiseIllegalBytes m => L0.StrToken -> m StrToken
+xlateStr :: ReaderHooks m => L0.StrToken -> m StrToken
 xlateStr = descendStrToken xlate
 
 -- | Gets rid of comments, then trailing whitespace.
@@ -85,9 +52,7 @@ xlateStr = descendStrToken xlate
 -- The caller gets the chance to do something with comments before their removal.
 -- Likewise, the caller gets to choose whether to abort or do error recovery on illegal tokens.
 pipeline ::
-  ( DeleteComment m
-  , RaiseIllegalBytes m
-  , WhitespaceError m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 pipeline input
@@ -99,9 +64,7 @@ pipeline input
   & dedupeEol
 
 simpleDeletions ::
-  ( DeleteComment m
-  , WhitespaceError m
-  , RaiseIllegalBytes m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 simpleDeletions = loop
@@ -109,12 +72,12 @@ simpleDeletions = loop
   loop inp0 = S.effect $ S.next inp0 >>= \case
   -- raise error and delete illegal tokens
     Right (L0.Illegal txt, inp1) -> do
-      raiseIllegalBytesOrChars txt
+      recoverableError $ IllegalBytesOrChars txt
       pure $ loop inp1
   -- delete and notify about raw trailing whitespace
     Right (L0.Whitespace ws, inp1) -> S.next inp1 >>= \case
       Right (eol@(L0.Eol _ _), inp2) -> do
-        raiseTrailingWhitespace ws.span
+        styleNote $ TrailingWhitespace ws
         let rest = yield eol >> inp2
         pure $ loop rest
       Right (other, inp2) -> pure $ do
@@ -122,11 +85,11 @@ simpleDeletions = loop
         let rest = yield other >> inp2
         loop rest
       Left r -> do
-        raiseTrailingWhitespace ws.span
+        styleNote $ TrailingWhitespace ws
         pure $ pure r
   -- delete comment tokens
     Right (L0.Comment txt, inp1) -> do
-      deleteComment txt
+      ignore txt
       pure $ loop inp1
   -- base cases
     Right (other, rest) -> do
@@ -134,11 +97,11 @@ simpleDeletions = loop
       pure $ yield other' >> loop rest
     Left r -> pure $ pure r
 
-strDeletions :: RaiseIllegalBytes m
+strDeletions :: ReaderHooks m
   => [L0.StrToken]
   -> m [StrToken]
 strDeletions (L0.IllStr err : rest) = do
-  raiseIllegalBytesOrChars err
+  recoverableError $ IllegalBytesOrCharsInString err
   strDeletions rest
 strDeletions (other : rest) = do
   other' <- xlateStr other
@@ -204,31 +167,32 @@ dedupeEol = firstLine
     Left r -> pure $ pure r
 
 consistentNewlines ::
-  ( WhitespaceError m )
-  => Maybe (Span, EolType)
+  ( ReaderHooks m )
+  => Maybe EolType
   -> Stream (Of L0.Token) m r
   -> Stream (Of L0.Token) m r
 consistentNewlines Nothing = loop
   where
   loop inp0 = S.effect $ S.next inp0 >>= \case
     Left r -> pure $ pure r
-    Right (nl@(L0.Eol l ty), rest) ->
-      pure $ yield nl >> consistentNewlines (Just (l, ty)) rest
+    Right (nl@(L0.Eol _ ty), rest) ->
+      pure $ yield nl >> consistentNewlines (Just ty) rest
     Right (other, rest) -> pure $ yield other >> loop rest
-consistentNewlines (Just (l, ty)) = loop
+consistentNewlines (Just ty) = loop
   where
   loop inp0 = S.effect $ S.next inp0 >>= \case
     Left r -> pure $ pure r
     Right (nl@(L0.Eol l' ty'), rest) -> do
-      when (ty /= ty') $ raiseInconsistentNewlines InconsistentNewlines
-        { expected = (l, ty)
-        , found = (l', ty')
+      when (ty /= ty') $ recoverableError $ MixedNewlines
+        { errorLoc = l'
+        , expectedNlType = ty
+        , foundNlType = ty'
         }
       pure $ yield nl >> loop rest
     Right (other, rest) -> pure $ yield other >> loop rest
 
 endsInNewline ::
-  ( WhitespaceError m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of L0.Token) m r
 endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
@@ -236,7 +200,7 @@ endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
   Right (x, inp1) -> S.next inp1 >>= \case
     Left r -> do
       case x of
-        L0.Eol l Eof -> raiseNoNlAtEof l
+        L0.Eol l Eof -> styleNote $ MissingNlAtEof l
         _ -> pure ()
       pure $ yield x >> pure r
 -- not at last token
@@ -244,34 +208,3 @@ endsInNewline inp0 = S.effect $ S.next inp0 >>= \case
       let rest = yield y >> inp2
       pure $ yield x >> endsInNewline rest
   Left r -> pure $ pure r
-
-class Monad m => DeleteComment m where
-  -- | For most purposes, we'd just strip comments out of the token stream with no fanfare.
-  -- Indeed, a valid implementation just ignores the comment Span and 'Text' and returns the unit.
-  --
-  -- However, we might have a processor that would like to
-  -- - search comments for tags like todo or debug
-  -- - lint the comment text for style (like looking for typos, or ensuring there's a space after the hash)
-  -- - keep the comment around for later, when perhaps it attaches to some nearby bit of code
-  --   (this is often used for documentation, but I don't recommend it personally.
-  --   I think comments should be there for the person who is reading the code, and no one and nothing else.)
-  deleteComment :: SrcText -> m ()
-
--- Instead of directly erroring out, allow the caller to decide:
--- - should we recover from the error and continue? (my morphemes, we already have)
--- - should I merge adjacent illegal bytes?
--- - how should the errors be reported?
-class Monad m => RaiseIllegalBytes m where
-  -- TODO someday, I'll distinguish between decoding errors and illegal codepoints
-  -- also bad bytes are just being replaced by the unicode Replacement Character
-  raiseIllegalBytesOrChars :: SrcText -> m ()
-
-data InconsistentNewlines = InconsistentNewlines
-  { expected :: (Span, EolType)
-  , found :: (Span, EolType)
-  }
-  deriving (Show)
-class Monad m => WhitespaceError m where
-  raiseTrailingWhitespace :: Span -> m ()
-  raiseInconsistentNewlines :: InconsistentNewlines -> m ()
-  raiseNoNlAtEof :: Span -> m ()

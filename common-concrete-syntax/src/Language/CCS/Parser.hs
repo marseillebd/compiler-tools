@@ -7,15 +7,17 @@ module Language.CCS.Parser
   , Encloser(..)
   , Separator(..)
   , parse
-  , ParseError(..)
   ) where
 
 import Control.Applicative (Alternative(..))
+import Control.Monad (forM_)
 import Data.Bifunctor (first, second)
 import Data.List.NonEmpty (NonEmpty((:|)), (<|))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
+import Language.CCS.Error (ReaderError(..), ReaderHooks(..))
+import Language.CCS.Util (internalError)
 import Language.Location (Pos, Span, spanFromPos)
 import Language.Nanopass (deflang, defpass)
 
@@ -80,8 +82,17 @@ xlate = descendAtomI XlateI
 ------ Grammar ------
 ---------------------
 
-parse :: Pos -> [L0.Token] -> ([ParseError], Maybe [CST])
-parse pos0 = runParser parseTopLevel (spanFromPos pos0)
+parse :: ReaderHooks m => Pos -> [L0.Token] -> m [CST]
+parse pos0 toks0 = do
+  case runParser parseTopLevel (spanFromPos pos0) toks0 of
+    ([], Just trees) -> pure trees
+    (e:es, Just trees) -> do
+      forM_ (e:es) recoverableError
+      pure trees
+    (errs@(_:_), Nothing) -> do
+      forM_ (init errs) recoverableError
+      fatalError $ last errs
+    ([], Nothing) -> internalError "parser has no errors, but did not generate trees"
 
 parseTopLevel :: Parser [CST]
 parseTopLevel = do
@@ -299,8 +310,8 @@ unconsSt st = case st.rest of
   [] -> Nothing
 
 data Result a
-  = Ok [ParseError] a (Consumed St)
-  | Err [ParseError] (Consumed St)
+  = Ok [ReaderError] a (Consumed St)
+  | Err [ReaderError] (Consumed St)
 
 data Consumed a
   = Consumed a
@@ -329,12 +340,7 @@ withSt :: St -> Result a -> Result (St, a)
 withSt st0 (Ok errs1 x st1) = Ok errs1 (updateSt st0 st1, x) st1
 withSt _ (Err errs1 st1) = Err errs1 st1
 
-data ParseError
-  = UnexpectedEndOfInput Span
-  | Expecting String L0.Token
-  deriving (Show)
-
-runParser :: Parser a -> Span -> [L0.Token] -> ([ParseError], Maybe a)
+runParser :: Parser a -> Span -> [L0.Token] -> ([ReaderError], Maybe a)
 runParser p loc inp = case unP p St{ rest = inp, pos = loc } of
   Ok errs a _ -> (reverse errs, Just a)
   Err errs _ -> (reverse errs, Nothing)
@@ -355,7 +361,7 @@ instance Alternative Parser where
 
 -- Take a single (terminal) token matching the predicate.
 -- Thus, includes a single specific token (equals), take any token (const True) and always fail (const False).
-satP :: (L0.Token -> Either ParseError a) -> Parser a
+satP :: (L0.Token -> Either ReaderError a) -> Parser a
 satP p = P $ \st -> case unconsSt st of
   Just (x, st') -> case p x of
     Right y -> Ok [] y (Consumed st')

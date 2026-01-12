@@ -6,103 +6,27 @@ module Language.CCS.Lexer.Assemble
   , TemplateType(..)
   , PunctuationType(..)
   , assemble
-  , MalformedPunctuation(..)
-  , MalformedNumber(..)
-  , MalformedString(..)
   ) where
 
 import Prelude hiding (lines, exp)
 
+import Language.CCS.Types.Assemble
+
 import Control.Monad (when)
-import Data.Text (Text)
-import GHC.Records (HasField(..))
-import Language.CCS.Error (internalError, unused)
+import Language.CCS.Error (ReaderError(..), ReaderHooks(..))
 import Language.CCS.Lexer.Cover (QuoteType(..), Sign(..), Radix(..))
-import Language.Location (Span, spanFromPos)
-import Language.Nanopass (deflang, defpass)
+import Language.CCS.Util (internalError, unused)
+import Language.Location (Span)
+import Language.Nanopass (defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
 
 import qualified Data.Text as T
-import qualified Language.CCS.Lexer.NoiseReduction as L0
+import qualified Language.CCS.Types.NoiseReduction as L0
 import qualified Language.Text as Src
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
-
-[deflang|
-(CCS from L0:CCS
-  (+ Atom
-    (Symbol Text)
-    (IntegerLiteral Integer)
-    (FloatingLiteral FloLit)
-    (StringLiteral Text)
-    (MultilineLiteral (* SrcText) SrcText)
-  )
-
-  (* Token
-    (- Symbol)
-    (- Number)
-    (- Str)
-
-    (- MlDelim)
-    (- MlContent)
-    (- MlClose)
-
-    (+ Atom Span Atom)
-    (+ StringTemplate Span TemplateType Text)
-  )
-
-  (- StrToken)
-
-  (* PunctuationType
-    (- Dots)
-    (+ Dot) (+ Dots2) (+ Dots3)
-    (- Colons)
-    (+ Colon) (+ Colons2) (+ Colons3)
-  )
-)
-|]
-
-data FloLit
-  = FloLit
-    { signF :: Sign
-    , magF :: Integer -- NOTE should be Natural
-    , expF :: (Radix, Integer)
-    }
-  deriving (Eq)
-
-instance Show FloLit where
-  show it = concat
-    [ case it.signF of { Positive -> "+"; Negative -> "-" }
-    , show it.magF
-    , if snd it.expF == 0 then ""
-      else concat
-      [ "x"
-      , show (fst it.expF).base
-      , "^"
-      , show $ snd it.expF
-      ]
-    ]
-
-data TemplateType
-  = OpenTemplate
-  | MidTemplate
-  | CloseTemplate
-  deriving (Eq, Show)
-
-deriving instance Show Atom
-deriving instance Show Token
-deriving instance Show PunctuationType
-
-instance HasField "span" Token Span where
-  getField (Atom a _) = a
-  getField (Punctuation a _) = a
-  getField (Whitespace a) = a.span
-  getField (Eol a _) = a
-  getField (StringTemplate a _ _) = a
-
-$(pure [])
 
 [defpass|(from L0:CCS to CCS)|]
 
@@ -110,7 +34,7 @@ _ignore :: ()
 _ignore = unused (XlateI, descendTokenI, descendPunctuationTypeI)
 
 
-xlate :: (MalformedPunctuation m, MalformedNumber m, MalformedString m)
+xlate :: (ReaderHooks m)
   => L0.Token -> m Token
 xlate = descendToken Xlate
   { onToken = \case
@@ -133,7 +57,7 @@ xlate = descendToken Xlate
 ------------------
 
 assemble ::
-  ( MalformedPunctuation m, MalformedNumber m, MalformedString m )
+  ( ReaderHooks m )
   => Stream (Of L0.Token) m r
   -> Stream (Of Token) m r
 assemble inp0 = S.effect $ S.next inp0 >>= \case
@@ -158,27 +82,27 @@ assemble inp0 = S.effect $ S.next inp0 >>= \case
 -------------------------
 
 longDots
-  :: MalformedPunctuation m
+  :: ReaderHooks m
   => Span
   -> Int
   -> m Token
 longDots loc 1 = pure $ Punctuation loc Dot
 longDots loc 2 = pure $ Punctuation loc Dots2
 longDots loc 3 = pure $ Punctuation loc Dots3
-longDots loc _ = do
-  raiseTooManyDots loc
+longDots loc n = do
+  recoverableError $ TooManyColons (Src.fromPos loc.start $ T.replicate n ".")
   pure $ Punctuation loc Dots3
 
 longColons
-  :: MalformedPunctuation m
+  :: ReaderHooks m
   => Span
   -> Int
   -> m Token
 longColons loc 1 = pure $ Punctuation loc Colon
 longColons loc 2 = pure $ Punctuation loc Colons2
 longColons loc 3 = pure $ Punctuation loc Colons3
-longColons loc _ = do
-  raiseTooManyColons loc
+longColons loc n = do
+  recoverableError $ TooManyColons (Src.fromPos loc.start $ T.replicate n ":")
   pure $ Punctuation loc Colons3
 
 ---------------------
@@ -186,7 +110,7 @@ longColons loc _ = do
 ---------------------
 
 number
-  :: MalformedNumber m
+  :: ReaderHooks m
   => Span
   -> Sign
   -> Radix
@@ -202,7 +126,7 @@ number loc sign _ i Nothing Nothing = pure $
 -- floating point literal without exponent
 number loc sign radix whole (Just (frac, len)) Nothing = do
   when (len == 0) $
-    raiseExpectingFractionalDigits loc
+    recoverableError $ ExpectingFractionalDigits loc
   pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole * (radix.base ^ len) + frac
@@ -211,7 +135,7 @@ number loc sign radix whole (Just (frac, len)) Nothing = do
 -- floating point literal with exponent
 number loc sign radix whole (Just (frac, len)) (Just exp) = do
   when (len == 0) $
-    raiseExpectingFractionalDigits loc
+    recoverableError $ ExpectingFractionalDigits loc
   pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole * (radix.base ^ len) + frac
@@ -219,7 +143,7 @@ number loc sign radix whole (Just (frac, len)) (Just exp) = do
     }
 -- BAD: integer with exponent
 number loc sign radix whole Nothing (Just exp) = do
-  raiseUnexpectedExponent loc
+  recoverableError $ InvalidExponentOnInteger loc
   pure $ Atom loc $ FloatingLiteral FloLit
     { signF = sign
     , magF = whole
@@ -230,7 +154,7 @@ number loc sign radix whole Nothing (Just exp) = do
 ------ Inline Strings ------
 ----------------------------
 
-stdStr :: MalformedString m
+stdStr :: ReaderHooks m
   => Span
   -> QuoteType
   -> [L0.StrToken]
@@ -239,7 +163,7 @@ stdStr :: MalformedString m
 stdStr loc open parts closeM = do
   case closeM of
     Just _ -> pure ()
-    Nothing -> raiseExpectingCloseQuote (spanFromPos loc.start)
+    Nothing -> recoverableError $ ExpectingCloseQuote loc.start
   let content = T.concat $ flip map parts $ \case
           L0.StdStr part -> part.text
           L0.StrEscape _ c -> T.singleton c
@@ -269,7 +193,7 @@ data MlSt = MlSt
   }
 
 mlMode ::
-  ( MalformedString m )
+  ( ReaderHooks m )
   => MlSt
   -> Stream (Of L0.Token) m r
   -> m (Token, Stream (Of L0.Token) m r)
@@ -301,7 +225,7 @@ mlMode st inp0 = S.next inp0 >>= \case
       pure (tok, rest)
 -- BAD: ends at end of file (with indent)
     Left r -> do
-      raiseExpectingCloseQuote $ spanFromPos lastIndent.span.end
+      recoverableError $ ExpectingMultilineDelimiter lastIndent.span.end
       let tok = Atom spn $ MultilineLiteral lines lastIndent
           lines = reverse st.mlLinesReverse
           spn = st.mlSpan <> lastIndent.span
@@ -311,24 +235,8 @@ mlMode st inp0 = S.next inp0 >>= \case
   Right _ -> internalError "unexpected token before MlClose"
 -- BAD ends at end of file (without indent)
   Left r -> do
-    raiseExpectingCloseQuote $ spanFromPos st.mlSpan.end
+    recoverableError $ ExpectingMultilineDelimiter st.mlSpan.end
     let tok = Atom st.mlSpan $ MultilineLiteral lines lastIndent
         lines = reverse st.mlLinesReverse
         lastIndent = Src.fromPos st.mlSpan.end ""
     pure (tok, pure r)
-
---------------------
------- Errors ------
---------------------
-
-class Monad m => MalformedPunctuation m where
-  raiseTooManyDots :: Span -> m ()
-  raiseTooManyColons :: Span -> m ()
-
-class Monad m => MalformedNumber m where
-  raiseExpectingFractionalDigits :: Span -> m ()
-  raiseExpectingExponent :: Span -> m ()
-  raiseUnexpectedExponent :: Span -> m ()
-
-class Monad m => MalformedString m where
-  raiseExpectingCloseQuote :: Span -> m ()

@@ -6,10 +6,7 @@ module Main (main) where
 import Data.Function ((&))
 import Data.IORef(IORef, newIORef, readIORef, modifyIORef)
 import Data.Text (Text)
-import Language.CCS.Lexer.Assemble (MalformedPunctuation(..), MalformedNumber(..), MalformedString(..))
-import Language.CCS.Lexer.Indentation (MalformedIndentation(..))
-import Language.CCS.Lexer.NoiseReduction (DeleteComment(..), RaiseIllegalBytes(..), WhitespaceError(..))
-import Language.CCS.Lexer.Sandhi (SandhiError(..))
+import Language.CCS.Error (ReaderHooks(..))
 import Language.CCS.Lexer (tokens, lexemes, lexemesToCsts)
 import System.FilePath ((</>), (<.>))
 import Test.Tasty (defaultMain, TestTree, testGroup)
@@ -48,7 +45,7 @@ main = defaultMain $ testGroup "Tests"
     [ golden "smoke test all syntax tree constructs" "allTrees" $ \input -> do
       -- let coverage = tokens input
       (lexErr, toks) <- execErr $ lexemes input
-      let (parseErrs, out_m) = lexemesToCsts toks
+      (parseErrs, out_m) <- execErr $ lexemesToCsts toks
       pure $ T.concat
         -- [ T.unlines $ T.pack . show <$> coverage
         -- , "\n------------------\n"
@@ -56,9 +53,9 @@ main = defaultMain $ testGroup "Tests"
         -- , "\n"
         -- , T.unlines $ T.pack . show <$> toks
         -- , "\n------------------\n"
-        [ T.unlines $ T.pack . show <$> parseErrs
+        [ parseErrs
         , "\n"
-        , maybe "" (LT.toStrict . pShowNoColor) out_m
+        , T.unlines $ (LT.toStrict . pShowNoColor) <$> out_m
         ]
     ]
   ]
@@ -99,55 +96,7 @@ instance Monad Err where
     runErr (k x) env
 addErr :: String -> Err ()
 addErr msg = Err $ \env -> modifyIORef env $ (<> (T.pack msg <> "\n"))
-instance DeleteComment Err where
-  deleteComment _ = pure ()
-instance RaiseIllegalBytes Err where
-  raiseIllegalBytesOrChars txt = addErr $ concat
-    [ "IllegalBytesOrChars: ", show txt ]
-instance WhitespaceError Err where
-  raiseTrailingWhitespace l = addErr $ concat
-    [ "TrailingWhitespace: ", show l ]
-  raiseInconsistentNewlines err = addErr $ concat
-    [ "InconosistentNewlines: "
-    , show err
-    ]
-  raiseNoNlAtEof l = addErr $ concat
-    [ "NoNlAtEof: ", show l ]
-instance MalformedPunctuation Err where
-  raiseTooManyDots l = addErr $ concat
-    [ "TooManyDots: ", show l ]
-  raiseTooManyColons l = addErr $ concat
-    [ "TooManyColons: ", show l ]
-instance MalformedNumber Err where
-  raiseExpectingFractionalDigits l = addErr $ concat
-    [ "ExpectingFractionalDigits: ", show l
-    ]
-  raiseExpectingExponent l = addErr $ concat
-    [ "ExpectingExponent: ", show l ]
-  raiseUnexpectedExponent l = addErr $ concat
-    [ "UnexpectedExponent: ", show l ]
-instance MalformedString Err where
-  raiseExpectingCloseQuote l = addErr $ concat
-    [ "ExpectingCloseQuote: ", show l ]
-instance MalformedIndentation Err where
-  raiseUnexpectedIndent l = addErr $ concat
-    [ "UnexpectedIndent: ", show l ]
-  raiseInsufficientIndentation l = addErr $ concat
-    [ "InsufficientIndentation: ", show l ]
-  raiseLeadingWhitespace l = addErr $ concat
-    [ "LeadingWhitespace: ", show l ]
-instance SandhiError Err where
-  raiseCrammedTokens l = addErr $ concat
-    [ "CrammedTokens: ", show l]
-  raiseExpectedWhitespace l = addErr $ concat
-    [ "ExpectedWhitespace: ", show l]
-  raiseBareIndent l = addErr $ concat
-    [ "BareIndent: ", show l]
-  raiseUnexpectedWhitespace l = addErr $ concat
-    [ "UnexpectedWhitespace: ", show l]
-  raiseUnexpectedDot l = addErr $ concat
-    [ "UnexpectedDot: ", show l]
-  raiseUnexpectedColon l = addErr $ concat
-    [ "UnexpectedColon: ", show l]
-  raiseUnexpectedBackslash l = addErr $ concat
-    [ "UnexpectedBackslash: ", show l]
+instance ReaderHooks Err where
+  ignore _ = pure ()
+  styleNote = addErr . show
+  recoverableError err = addErr $ show err
