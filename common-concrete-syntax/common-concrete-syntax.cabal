@@ -36,6 +36,7 @@ library
       Language.CCS.Parser
       Language.CCS.Recognize
       Language.CCS.Recognize.Core
+      Language.CCS.Recognize.New
       Language.CCS.Util
     other-modules:
       Language.CCS.Types.Assemble
@@ -53,6 +54,7 @@ library
       , ConstraintKinds
       , DataKinds
       , DeriveFunctor
+      , InstanceSigs
       , LambdaCase
       , MultiWayIf
       , NamedFieldPuns
