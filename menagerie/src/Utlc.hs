@@ -11,11 +11,12 @@ module Utlc
   , Ast(..), Expr(..)
   ) where
 
-import Prelude hiding (id, (.), fail, last)
-import Language.CCS hiding (type (~>), Expecting, parenList)
-import Language.CCS.Recognize.New (Recog, runRecog, satR, raiseR, monadR, arrowR, labelR, Result(..), RecogList, parseR, lookRL, posRL, RecogMonad, feedR, reportR, restRL, monadRL)
+import Prelude hiding (fail, last)
+import Language.CCS
+import Language.CCS.Recognize.New
 
-import Control.Monad (forM_)
+import Control.Monad (forM_, (>=>), (<=<))
+import Data.Foldable (toList)
 import Data.IORef(IORef, newIORef, readIORef, modifyIORef)
 import Language.Nanopass (deflang)
 import System.Exit (exitFailure)
@@ -67,136 +68,125 @@ readSource filepath = do
   pure ast
 
 recogExpr :: CST ~> Expr
-recogExpr = recogVar <> recogFun -- <> recogApp <> recogParen -- FIXME
+recogExpr = recogVar <> recogFun <> recogApp <> recogParen recogExpr
 
--- recogParen :: CST ~> Expr
--- recogParen = recogExpr <<< requireR "expecting parenthesized expression" <<< parens
-
--- requireR :: Text -> Maybe a ~> a
--- requireR msg = proc m -> case m of
---   Just x -> returnA -< x
---   Nothing -> fail msg -< ()
+recogParen :: (CST ~> Expr) -> (CST ~> Expr)
+recogParen action (Enclose _ Round (Just x)) = action x
+recogParen _ other = fail $ Expected "parentheses" (Just other)
 
 recogVar :: CST ~> Expr
-recogVar = proc cst -> do
-  x <- recogId -< cst
-  returnA -< Var cst.span x
+recogVar cst = Var cst.span <$> recogId cst
 
 recogFun :: CST ~> Expr
-recogFun = arrowR $ \cst -> do
-  (afterKw, bodyTree) <- feedR cst $ satR $ \case
+recogFun cst = do
+  -- recognize keywoord
+  (afterKw, bodyTree) <- flip test cst $ \case
     List _ Space (it :| bodyTree)
       | List _ Chain (kw:|afterKw) <- it
-      , Atom kwLoc (Symbol "fn") <- kw
-      -> Right ((kwLoc.end, afterKw), bodyTree)
-    _ -> Left $ Expecting "function literal `fn(...) ...`" (Just cst)
-  x <- feedR afterKw $ parseR_ (.span) $ do
-    let noParams = Expecting "parameter list"
-    params <- satRL (const $ noParams Nothing) $
-      parenListR (noParams . Just)
+      , Atom _ (Symbol "fn") <- kw
+      -> Right ((kw.span.end, afterKw), (it.span.end, bodyTree))
+    _ -> Left $ Expected "function literal `fn(...) ...`" (Just cst)
+  -- parameter list
+  (x, afterFnHead) <- parse afterKw $ do
+    params <- satisfies parenList `onMissing` NoParamsAfterFn
     param <- case params of
-      [it] -> pure it
-      [] -> monadRL raiseR $ Expecting "non-empty parameter list" Nothing
-      _:other:_ -> monadRL raiseR (Expecting "at most one parameter" (Just other))
-    x <- monadRL recogId param
-    endRL (Unexpected (Just "after parameter list"))
-    pure x
-  expr <- case bodyTree of
-    it:rest -> do
-      expr <- monadR recogExpr it
-      case rest of
-        [] -> pure ()
-        _ -> forM_ rest $ \other ->
-          monadR reportR $ Unexpected (Just "after function body") other
-      pure expr
-    [] -> monadR raiseR $ Expecting "function body" Nothing
+      it:more -> do
+        case more of
+          [] -> pure ()
+          other:_ -> report $ Expected "at most one parameter" (Just other)
+        pure it
+      [] -> fail $ Expected "non-empty parameter list" Nothing
+    recogId param
+  headM afterFnHead $ \other ->
+    report $ Unexpected (Just "after parameter list") other
+  -- function body
+  (expr, afterBody) <- parse bodyTree $ do
+    pop >>= onLeftM (\loc -> fail $ NoFunctionBody (Left loc)) >>= recogExpr
+  headM afterBody $ \other ->
+    report $ Unexpected (Just "after function body") other
   pure $ Fun cst.span x expr
 
--- recogApp :: CST ~> Expr
--- recogApp = proc cst -> do
---   a :| bs <- chained -< cst
---   b <- case bs of
---     [b] -> returnA -< b
---     _ -> fail "expecting function call" -< ()
---   fun <- recogExpr -< a
---   arg <- recogExpr -< b
---   returnA -< App cst.span fun arg
-
-
+recogApp :: CST ~> Expr
+recogApp cst = do -- TODO try writing it a little nicer
+  (f, x) <- case cst of
+    List _ Chain (f:|xs)
+      | [Enclose _ Round (Just x)] <- xs
+      -> pure (f, x)
+    _ -> fail $ Expected "function call" (Just cst)
+  App cst.span <$> recogExpr f <*> recogExpr x
 
 --- Primitive Recognizers ---
 
-recogKw :: Text -> CST ~> ()
-recogKw needle = arrowR $ \cst -> do
-  let msg = Expecting ("`" <> needle <> "`") (Just cst)
-  kwId <- monadR (labelR msg $ recogKwOrId) cst
-  case kwId of
-    Left hay | hay == needle -> pure ()
-    Left _ -> monadR raiseR msg
-    Right _ -> monadR raiseR msg
+-- recogKw :: Text -> CST ~> ()
+-- recogKw needle = arrowR $ \cst -> do
+--   let msg = Expected ("`" <> needle <> "`") (Just cst)
+--   kwId <- monadR (labelR msg $ recogKwOrId) cst
+--   case kwId of
+--     Left hay | hay == needle -> pure ()
+--     Left _ -> monadR raiseR msg
+--     Right _ -> monadR raiseR msg
 
 recogId :: CST ~> Text
-recogId = arrowR $ \cst ->
-  monadR recogKwOrId cst >>= \case
+recogId cst = recogKwOrId cst >>= \case
     Right x -> pure x
-    Left _ -> monadR raiseR $ Expecting "identifier" (Just cst)
+    Left _ -> fail $ Expected "identifier" (Just cst)
 
 recogKwOrId :: CST ~> Either Text Text
-recogKwOrId = satR $ \case
+recogKwOrId = test $ \case
   Atom _ (Symbol x) -> Right $
     if x `elem` kws
     then Left x else Right x
-  other -> Left $ Expecting "symbol" (Just other)
+  other -> Left $ Expected "symbol" (Just other)
   where
   kws =
     [ "fn"
     ]
 
-type (~>) = Recog RecogError
+type a ~> b = a -> Recog RecogError b
 
 ------ FIXME cst-only recognizers ------
 --move elsewhere
 
-parseNE :: RecogList e CST b -> Recog e (NonEmpty CST) b
-parseNE action = proc xs -> do
-  (b, _) <- parseR (.span) action -< ((NE.head xs).span.start, xs)
-  returnA -< b
+-- parseNE :: Recog e CST b -> Recog e (NonEmpty CST) b
+-- parseNE action = proc xs -> do
+--   (b, _) <- parseR (.span) action -< ((NE.head xs).span.start, xs)
+--   returnA -< b
 
-satRL :: (Pos -> e) -> Recog e tok r -> RecogList e tok r
-satRL msg action = lookRL $ proc look -> do
-  case look of
-    Right next -> action -< next
-    Left pos -> raiseR -< msg pos
+-- satRL :: (Pos -> e) -> Recog e tok r -> RecogList e tok r
+-- satRL msg action = lookRL $ proc look -> do
+--   case look of
+--     Right next -> action -< next
+--     Left pos -> raiseR -< msg pos
 
-endRL :: (tok -> e) -> RecogList e tok ()
-endRL msg = lookRL $ satR $ \case
-  Right next -> Left $ msg next
-  Left pos -> Right ()
+-- endRL :: (tok -> e) -> RecogList e tok ()
+-- endRL msg = lookRL $ satR $ \case
+--   Right next -> Left $ msg next
+--   Left pos -> Right ()
 
-enclosedR :: Encloser -> (CST ~> Maybe CST)
-enclosedR brak = satR $ \case
-  Enclose _ brak' inner | brak == brak' -> Right inner
-  other -> Left $ Expecting brakDescr (Just other)
-  where
-  brakDescr = case brak of
-    Round -> "parentheses"
-    Square -> "square brackets"
-    Curly -> "curly brackets"
+-- enclosedR :: Encloser -> (CST ~> Maybe CST)
+-- enclosedR brak = satR $ \case
+--   Enclose _ brak' inner | brak == brak' -> Right inner
+--   other -> Left $ Expected brakDescr (Just other)
+--   where
+--   brakDescr = case brak of
+--     Round -> "parentheses"
+--     Square -> "square brackets"
+--     Curly -> "curly brackets"
 
-separatedRL :: Separator -> RecogList RecogError CST b -> (CST ~> b)
-separatedRL sep action = proc tree -> do
-  case tree of
-    List _ sep' xs | sep == sep' -> parseNE action -< xs
-    other -> raiseR -< Expecting sepDescr (Just other)
-  where
-  sepDescr = case sep of
-    Semicolon -> "semicolon-separated list"
-    Comma -> "comma-separated list"
-    Space -> "cst list" -- TODO how do I describe this?
-    Chain -> "access/call chain"
-    Qualify -> "qualified atom"
+-- separatedRL :: Separator -> RecogList RecogError CST b -> (CST ~> b)
+-- separatedRL sep action = proc tree -> do
+--   case tree of
+--     List _ sep' xs | sep == sep' -> parseNE action -< xs
+--     other -> raiseR -< Expected sepDescr (Just other)
+--   where
+--   sepDescr = case sep of
+--     Semicolon -> "semicolon-separated list"
+--     Comma -> "comma-separated list"
+--     Space -> "cst list" -- TODO how do I describe this?
+--     Chain -> "access/call chain"
+--     Qualify -> "qualified atom"
 
-parseR_ getP action = fst <$> parseR getP action
+-- parseR_ getP action = fst <$> parseR getP action
 
 -- | A list of csts, separated by commas, enclosed in parenthesis.
 -- Also allows for parenthesized indentation, where each line is a possibly comma-separated list of CSTs.
@@ -216,8 +206,8 @@ parseR_ getP action = fst <$> parseR getP action
 --   3
 --  )
 -- @
-parenListR :: (CST -> e) -> Recog e CST [CST]
-parenListR onError = satR $ \case
+parenList :: CST -> Recog e (Either CST [CST])
+parenList = pure . \case
   Enclose _ Round Nothing -> Right []
   Enclose _ Round (Just inner)
     | List _ Comma xs <- inner -> Right $ NE.toList xs
@@ -226,15 +216,53 @@ parenListR onError = satR $ \case
           adapt x = [x]
       Right $ concat $ adapt <$> lines
     | otherwise -> Right [inner]
-  other -> Left $ onError other
+  other -> Left other
+
+optional :: (Foldable f) => Recog e (f a) -> Recog e (Maybe a)
+optional action = do
+  results <- toList <$> action
+  pure $ case results of
+    x:_ -> Just x
+    [] -> Nothing
+
+onMissing :: Recog e (Either Expect a) -> (Expect -> e) -> Recog e a
+onMissing action onError = action >>= \case
+  Right x -> pure x
+  Left err -> fail $ onError err
+
+satisfies :: (Foldable f) => (CST -> Recog e (f a)) -> Recog e (Either Expect a)
+satisfies action = pop >>= \case
+  Right cst -> do
+    results <- action cst
+    case toList results of
+      x:_ -> pure (Right x)
+      [] -> pure $ Left (Right cst)
+  Left loc -> pure $ Left (Left loc)
+
+type Expect = Either Span CST
+
+headM :: (Applicative m) => [a] -> (a -> m ()) -> m ()
+headM [] = const $ pure ()
+headM (x:_) = ($ x)
+
+leftM :: (Applicative m) => Either a b -> (a -> m b) -> m b
+leftM (Right x) = const $ pure x
+leftM (Left x) = ($ x)
+
+onLeftM :: (Applicative m) => (a -> m b) -> Either a b -> m b
+onLeftM = flip leftM
+
+-- feed :: (Monad m) => m a -> (a -> m b) -> m b
 
 ----------------------------
 ------ Error Handling ------
 ----------------------------
 
 data RecogError
-  = Expecting { expectDescr :: Text, foundE :: Maybe CST }
+  = Expected { expectDescr :: Text, foundE :: Maybe CST }
   | Unexpected { contextDescr :: Maybe Text, foundU :: CST }
+  | NoParamsAfterFn (Either Span CST)
+  | NoFunctionBody (Either Span CST)
   deriving (Show)
 
 newtype Err a = Err { runErr :: IORef [ReaderError] -> IO (Either ReaderError a) }

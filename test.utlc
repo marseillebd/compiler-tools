@@ -1,2 +1,1 @@
-#(fn(x) x)(hello)
-fn(x) x
+(fn(x) x)(hello)
