@@ -5,6 +5,7 @@
 module Language.CCS.Recognize
   ( Recog
   , runRecog
+  , runRecogs
   , parse, pop
   , fail, report
   , test
@@ -45,6 +46,17 @@ runRecog action input = snd <$> unR (action input) st0
   st0 = St
     { context = Nothing
     , rest = Done $ ZwSpan input.span.start
+    }
+
+runRecogs :: (Foldable t)
+  => (Pos, t CST)
+  -> Recog err a
+  -> Result err (a, [CST])
+runRecogs (p, trees) action = snd <$> (parse (p, trees) action).unR st0
+  where
+  st0 = St
+    { context = Nothing
+    , rest = Done $ ZwSpan p
     }
 
 -- | Examine a given value according to a recognition rule (eg pattern match function, predicate, &c).

@@ -1,4 +1,3 @@
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}

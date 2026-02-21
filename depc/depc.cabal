@@ -1,0 +1,63 @@
+cabal-version:      3.0
+name:               depc
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            GPL-3.0-or-later
+license-file:       LICENSE
+author:             Marseille Bouchard
+maintainer:         marseillebd@proton.me
+-- copyright:
+category:           Language
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common common
+    ghc-options:
+      -Wall
+      -Wincomplete-uni-patterns
+      -- ^ incomplete pattern matching in lambda parameters &c
+      -Wincomplete-record-updates
+      -Wunticked-promoted-constructors
+    build-depends:
+      , base ^>=4.21.0.0
+      , text >=2.1
+
+library
+    import:           common
+    exposed-modules:
+      DepC.Reader
+      DepC.Syntax
+      DepC.ToC
+    other-modules:
+    -- other-extensions:
+    build-depends:
+      , common-concrete-syntax
+      , nanopass
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable depc
+    import:           common
+    main-is:          Main.hs
+    -- other-modules:
+    -- other-extensions:
+    build-depends:
+        base ^>=4.21.0.0,
+        depc
+
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+test-suite depc-test
+    import:           common
+    default-language: Haskell2010
+    -- other-modules:
+    -- other-extensions:
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base ^>=4.21.0.0,
+        depc
