@@ -13,7 +13,7 @@ module Utlc
 
 import Prelude hiding (fail, last, lines)
 import Language.CCS
-import Language.CCS.Recognize.New
+import Language.CCS.Recognize
 
 import Control.Monad (forM_)
 import Data.Foldable (toList)

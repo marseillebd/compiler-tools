@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module Language.CCS.Lexer.Sandhi
   ( CCS(..)
   , Token(..)
@@ -16,7 +18,7 @@ import Control.Monad (when, unless)
 import Language.CCS.Util (internalError, unused)
 import Language.CCS.Types.Assemble (TemplateType(..))
 import Language.CCS.Lexer.Cover (BracketType(..))
-import Language.Location (Span, spanFromPos)
+import Language.Location (Span, pattern ZwSpan)
 import Language.Nanopass (defpass)
 import Streaming.Prelude (yield)
 import Streaming (Stream, Of(..))
@@ -75,7 +77,7 @@ process = mapWithLookaround $ \(prev, here, next) -> case here of
 -- punctuation creates interesting effects though!
     L0.Open _ -> do
       let addChain = if isAtom ViewFromRight prev || isClose prev
-            then (Punctuation (spanFromPos spn.start) Chain :)
+            then (Punctuation (ZwSpan spn.start) Chain :)
             else id
       pure $ addChain [xlate here]
     L0.Close _ -> pure [xlate here]
@@ -118,7 +120,7 @@ type Process m a = Maybe L0.Token -> a -> Maybe L0.Token -> m [Token]
 atomSandhi :: ReaderHooks m => Process m L0.Token
 atomSandhi (Just prev) atom _ = do
   when (isAtom ViewFromRight (Just prev) || isClose (Just prev)) $ do
-    recoverableError $ CrammedTokens (spanFromPos atom.span.start) prev atom
+    recoverableError $ CrammedTokens (ZwSpan atom.span.start) prev atom
   pure [xlate atom]
 atomSandhi Nothing atom _ = pure [xlate atom]
 

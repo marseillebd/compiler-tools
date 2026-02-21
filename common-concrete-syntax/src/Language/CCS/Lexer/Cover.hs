@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module Language.CCS.Lexer.Cover
   ( CCS(..)
   , Token(..)
@@ -21,7 +23,7 @@ import Data.Text (Text)
 import GHC.Records (HasField(..))
 import Language.CCS.Util (unwrapOrPanic_, internalError)
 import Language.CCS.Lexer.Decode (Line(..), EolType(..))
-import Language.Location (Span, mkSpan, spanFromPos, incLine)
+import Language.Location (Span, pattern Span, pattern ZwSpan, incLine)
 import Language.Nanopass (deflang)
 import Language.Text (SrcText)
 
@@ -128,8 +130,8 @@ lexLines = loop StdLex
     where
     (toks, mode') = lexLine mode l.line
     end = case l.eol of
-      Eof -> Eol (spanFromPos l.line.span.end) l.eol
-      _ -> Eol (unwrapOrPanic_ $ mkSpan l.line.span.end (incLine l.line.span.end)) l.eol
+      Eof -> Eol (ZwSpan l.line.span.end) l.eol
+      _ -> Eol (Span l.line.span.end (incLine l.line.span.end)) l.eol
   loop _ [] = []
 
 data LexMode

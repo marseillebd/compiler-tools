@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-} -- TOODO mark this extension as used
+{-# LANGUAGE PatternSynonyms #-} -- TOODO mark this extension as used
 
 module Language.CCS.Parser
   ( CCS(..)
@@ -18,7 +19,7 @@ import Data.Text (Text)
 import GHC.Records (HasField(..))
 import Language.CCS.Error (ReaderError(..), ReaderHooks(..))
 import Language.CCS.Util (internalError)
-import Language.Location (Pos, Span, spanFromPos)
+import Language.Location (Pos, Span, pattern ZwSpan)
 import Language.Nanopass (deflang, defpass)
 
 import qualified Data.List.NonEmpty as NE
@@ -84,7 +85,7 @@ xlate = descendAtomI XlateI
 
 parse :: ReaderHooks m => Pos -> [L0.Token] -> m [CST]
 parse pos0 toks0 = do
-  case runParser parseTopLevel (spanFromPos pos0) toks0 of
+  case runParser parseTopLevel (ZwSpan pos0) toks0 of
     ([], Just trees) -> pure trees
     (e:es, Just trees) -> do
       forM_ (e:es) recoverableError
@@ -306,7 +307,7 @@ data St = St
 unconsSt :: St -> Maybe (L0.Token, St)
 unconsSt st = case st.rest of
   t : x : xs -> Just (t, st{rest = x:xs, pos = x.span})
-  [t] -> Just (t, st{rest = [], pos = spanFromPos t.span.end})
+  [t] -> Just (t, st{rest = [], pos = ZwSpan t.span.end})
   [] -> Nothing
 
 data Result a

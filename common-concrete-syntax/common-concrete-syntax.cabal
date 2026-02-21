@@ -35,8 +35,6 @@ library
       Language.CCS.Lexer.Sandhi
       Language.CCS.Parser
       Language.CCS.Recognize
-      Language.CCS.Recognize.Core
-      Language.CCS.Recognize.New
       Language.CCS.Util
     other-modules:
       Language.CCS.Types.Assemble

@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 module Language.CCS.Lexer.Indentation
   ( CCS(..)
   , Token(..)
@@ -15,7 +16,7 @@ import Control.Monad (forM, unless, replicateM_, void)
 import Data.Text (Text)
 import Language.CCS.Error (ReaderHooks(..), ReaderError(..))
 import Language.CCS.Util (internalError, unused, unwrapOrPanic_)
-import Language.Location (spanFromPos)
+import Language.Location (pattern ZwSpan)
 import Language.Nanopass (defpass)
 import Language.Text (SrcText)
 import Streaming.Prelude (yield)
@@ -169,7 +170,7 @@ findFirstIndented inp0 = S.effect $ S.next inp0 >>= \case
     Right (other, rest) -> do
       other' <- xlate unknownIndent other
       pure $ do
-        yield $ Nextline (spanFromPos other.span.start)
+        yield $ Nextline (ZwSpan other.span.start)
         yield other'
         findFirstIndented rest
   -- base cases

@@ -1,3 +1,6 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
+
 -- TODO incorporate the range overlap analysis from eexprs
 -- see: https://github.com/marseillebd/eexprs/blob/c75ca4f829728d9ad978f531958c2acaf01c6086/hs/eexpr/src/Numeric/Interval/Compare.hs
 module Language.Location
@@ -18,8 +21,8 @@ module Language.Location
   -- * Spans
   -- $spans
   , Span
-  , spanFromPos
-  , mkSpan
+  , pattern Span
+  , pattern ZwSpan
   ) where
 
 import Data.Function (on)
@@ -154,20 +157,30 @@ incLine p = Pos
 -- 'Span' allows us to specify both empty and non-empty ranges of text.
 -- Thus, we can use them to easily extract, replace, or delete contiguous sections of source code.
 
-data Span = Span
+data Span = Span_
   { _start :: Pos
   , _end :: Pos
   }
 instance HasField "start" Span Pos where getField = _start
 instance HasField "end" Span Pos where getField = _end
 
-spanFromPos :: Pos -> Span
-spanFromPos pos = Span pos pos
-
-mkSpan :: Pos -> Pos -> Maybe Span
-mkSpan a b
-  | a <= b = Just $ Span a b
+-- | Zero-width 'Span'.
+pattern ZwSpan :: Pos -> Span
+pattern ZwSpan a <- (fromZwSpan -> Just a)
+  where
+  ZwSpan a = Span_ a a
+fromZwSpan :: Span -> Maybe Pos
+fromZwSpan s
+  | s.start == s.end = Just s.start
   | otherwise = Nothing
+
+{-# COMPLETE Span #-}
+pattern Span :: Pos -> Pos -> Span
+pattern Span _start _end <- Span_{_start, _end}
+  where
+  Span a b
+    | a <= b = Span_ a b
+    | otherwise = Span_ b a
 
 -- NOTE there's nothing that swaps the start/stop positions of the span
 -- that is intentional, as I think it could lead to unexpected bugs
@@ -184,11 +197,11 @@ instance Read Span where
     Read.get >>= \case { '-' -> pure (); _ -> pfail }
     Read.get >>= \case { '-' -> pure (); _ -> pfail }
     end <- readPrec @Pos
-    maybe pfail pure $ mkSpan start end
+    pure $ Span start end
 
 instance Semigroup Span where
   -- | Takes the convex hull of two spans.
-  a <> b = Span
+  a <> b = Span_
     { _start = min a.start b.start
     , _end = max a.end b.end
     }

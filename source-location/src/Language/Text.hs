@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Language.Text
   ( SrcText
@@ -28,10 +29,9 @@ import Prelude hiding (take, takeWhile, null)
 
 import Control.Applicative (Alternative(..))
 import Data.Bifunctor (Bifunctor(first))
-import Data.Maybe (fromJust)
 import Data.Text (Text)
 import GHC.Records (HasField(..))
-import Language.Location (Pos, incCol, incLine, Span, mkSpan)
+import Language.Location (Pos, incCol, incLine, Span, pattern Span)
 
 import qualified Data.Text as T
 
@@ -45,7 +45,7 @@ instance Show SrcText where
 
 fromPos :: Pos -> Text -> SrcText
 fromPos p text = SrcText
-  { _span = fromJust $ mkSpan p (p `advText` text)
+  { _span = Span p (p `advText` text)
   , _text = text
   }
 
@@ -94,8 +94,9 @@ instance Monad Parse where
     unP (k x) st'
 
 evalParse :: Parse a -> SrcText -> Maybe (a, SrcText)
-evalParse action src = (unP action) st0 >>= \(st, x) -> do
-  loc <- mkSpan st.mid st.end
+evalParse action src = do
+  (st, x) <- unP action st0
+  let loc = Span st.mid st.end
   pure (x, SrcText loc st.rest)
   where
   st0 = St
@@ -110,8 +111,8 @@ withConsumed :: Parse a -> Parse (SrcText, a)
 withConsumed p = P $ \st -> do
   let subSt = st{start = st.mid, taken = ""}
   (subSt', x) <- unP p subSt
-  spn <- mkSpan subSt'.start subSt'.mid
-  let txt = subSt'.taken
+  let spn = Span subSt'.start subSt'.mid
+      txt = subSt'.taken
       st' = subSt'{start = st.start, taken = st.taken <> subSt'.taken}
   pure (st', (SrcText spn txt, x))
 
