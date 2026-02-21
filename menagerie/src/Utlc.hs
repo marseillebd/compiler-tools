@@ -11,11 +11,11 @@ module Utlc
   , Ast(..), Expr(..)
   ) where
 
-import Prelude hiding (fail, last)
+import Prelude hiding (fail, last, lines)
 import Language.CCS
 import Language.CCS.Recognize.New
 
-import Control.Monad (forM_, (>=>), (<=<))
+import Control.Monad (forM_)
 import Data.Foldable (toList)
 import Data.IORef(IORef, newIORef, readIORef, modifyIORef)
 import Language.Nanopass (deflang)
@@ -23,7 +23,6 @@ import System.Exit (exitFailure)
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text as T
 
 main :: FilePath -> IO ()
 main filepath = do
@@ -88,7 +87,8 @@ recogFun cst = do
     _ -> Left $ Expected "function literal `fn(...) ...`" (Just cst)
   -- parameter list
   (x, afterFnHead) <- parse afterKw $ do
-    params <- satisfies parenList `onMissing` NoParamsAfterFn
+    params <- satisfies parenList
+              >>= onLeftM (\loc -> fail $ NoParamsAfterFn loc)
     param <- case params of
       it:more -> do
         case more of
@@ -101,7 +101,8 @@ recogFun cst = do
     report $ Unexpected (Just "after parameter list") other
   -- function body
   (expr, afterBody) <- parse bodyTree $ do
-    pop >>= onLeftM (\loc -> fail $ NoFunctionBody (Left loc)) >>= recogExpr
+    pop >>= onLeftM (\loc -> fail $ NoFunctionBody (Left loc))
+        >>= recogExpr
   headM afterBody $ \other ->
     report $ Unexpected (Just "after function body") other
   pure $ Fun cst.span x expr
@@ -218,18 +219,6 @@ parenList = pure . \case
     | otherwise -> Right [inner]
   other -> Left other
 
-optional :: (Foldable f) => Recog e (f a) -> Recog e (Maybe a)
-optional action = do
-  results <- toList <$> action
-  pure $ case results of
-    x:_ -> Just x
-    [] -> Nothing
-
-onMissing :: Recog e (Either Expect a) -> (Expect -> e) -> Recog e a
-onMissing action onError = action >>= \case
-  Right x -> pure x
-  Left err -> fail $ onError err
-
 satisfies :: (Foldable f) => (CST -> Recog e (f a)) -> Recog e (Either Expect a)
 satisfies action = pop >>= \case
   Right cst -> do
@@ -240,17 +229,6 @@ satisfies action = pop >>= \case
   Left loc -> pure $ Left (Left loc)
 
 type Expect = Either Span CST
-
-headM :: (Applicative m) => [a] -> (a -> m ()) -> m ()
-headM [] = const $ pure ()
-headM (x:_) = ($ x)
-
-leftM :: (Applicative m) => Either a b -> (a -> m b) -> m b
-leftM (Right x) = const $ pure x
-leftM (Left x) = ($ x)
-
-onLeftM :: (Applicative m) => (a -> m b) -> Either a b -> m b
-onLeftM = flip leftM
 
 -- feed :: (Monad m) => m a -> (a -> m b) -> m b
 
